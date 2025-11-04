@@ -3,106 +3,94 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Vidéo prospection</title>
+  <title>Vidéo de prospection Aqisio</title>
   <style>
     :root { color-scheme: dark; }
-    body{margin:0;background:#0b0b0b;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto}
-    .wrap{display:grid;place-items:center;min-height:100dvh;padding:24px}
-    .player{width:min(960px,100%);aspect-ratio:16/9;position:relative}
-    iframe{width:100%;height:100%;border:0;border-radius:16px}
-    .note{opacity:.7;margin-top:12px;font-size:.9rem}
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: #fff;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    .wrap {
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      padding: 24px;
+    }
+    .player {
+      width: min(960px, 100%);
+      aspect-ratio: 16/9;
+      position: relative;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 16px;
+    }
+    .note {
+      opacity: 0.7;
+      margin-top: 12px;
+      font-size: 0.9rem;
+    }
+
+    /* --- Overlay Calendly --- */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 16px;
+    }
+    .card {
+      width: min(800px, 100%);
+      background: #111;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .close {
+      display: inline-block;
+      margin-bottom: 8px;
+      cursor: pointer;
+      opacity: 0.7;
+      font-size: 0.9rem;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="player">
-      <!-- === Cloudflare Stream iframe (TA VIDÉO) === -->
-      <iframe id="stream-player"
-        src="https://customer-g50chvgfq5q94nqo.cloudflarestream.com/5032da31754eb596edf1e9d68cbe031e/iframe"
+      <!-- === Cloudflare Stream (ta vidéo type) === -->
+      <iframe
+        id="stream-player"
+        src="https://customer-g50chvgfq5q94nqo.cloudflarestream.com/5032da31754eb596edf1e9d68cbe031e/iframe?autoplay=true&muted=true"
         allow="autoplay; encrypted-media; picture-in-picture"
-        allowfullscreen="true"></iframe>
+        allowfullscreen="true"
+      ></iframe>
     </div>
     <p class="note" id="debug"></p>
   </div>
 
-  <!-- SDK Cloudflare Stream -->
+  <!-- Overlay Calendly -->
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <span class="close" id="close">✕ Fermer</span>
+      <div
+        class="calendly-inline-widget"
+        data-url="https://calendly.com/ton-compte/30min"
+        style="min-width:320px;height:700px;"
+      ></div>
+    </div>
+  </div>
+
+  <!-- SDK Cloudflare Stream + Calendly -->
   <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+  <script src="https://assets.calendly.com/assets/external/widget.js" async></script>
+
   <script>
-    // --------- CONFIG ---------
-    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxrPWGjBvTNKfoz-uXZAzSk_uoDN6jAfY3QLfetHpG1vxCPnotvrcstmM4x-4wcyTivAg/exec";
-    const qs = new URLSearchParams(location.search);
-    const prospectId = qs.get('p') || 'unknown';
-    const videoId = "5032da31754eb596edf1e9d68cbe031e"; // fixe pour cette vidéo
-    const sessionId = (crypto.randomUUID && crypto.randomUUID()) || (Date.now()+"-"+Math.random());
-    const userAgent = navigator.userAgent;
-
-    // --------- PLAYER ---------
-    const iframe = document.getElementById('stream-player');
-    const player = Stream(iframe);
-
-    // Autoplay robuste (les navigateurs exigent souvent muted pour autoplay)
-    player.play().catch(async () => {
-      try { player.muted = true; await player.play(); } catch(_) {}
-    });
-
-    // --------- TRACKING : secondes uniques vues ---------
-    let duration = 0;
-    let watchedMap = Object.create(null); // { seconde: true }
-    let lastSentAt = 0;
-
-    async function refreshDuration() {
-      try { duration = Math.floor(await player.duration); } catch(_) {}
-    }
-    refreshDuration();
-    const durTimer = setInterval(refreshDuration, 3000);
-
-    // Scrute la position toutes les 500ms
-    const pollMs = 500;
-    const poll = setInterval(async () => {
-      try {
-        const paused = await player.paused;
-        if (paused) return;
-        const t = await player.currentTime; // float (s)
-        const sec = Math.floor(t);
-        watchedMap[sec] = true;
-
-        const now = Date.now();
-        if (now - lastSentAt > 10000) { // résumé toutes ~10s
-          lastSentAt = now;
-          sendSummary(false);
-        }
-      } catch(_) {}
-    }, pollMs);
-
-    function computeSummary() {
-      const secondsWatched = Object.keys(watchedMap).length;
-      const percent = duration > 0 ? Math.min(100, Math.round((secondsWatched / duration) * 100)) : 0;
-      return { secondsWatched, percent };
-    }
-
-    async function sendSummary(final=false) {
-      const { secondsWatched, percent } = computeSummary();
-      // Affichage debug (facultatif)
-      const dbg = document.getElementById('debug');
-      if (dbg) dbg.textContent = `Vu ~${secondsWatched}s / ${duration}s (${percent}%)` + (final ? " [final]" : "");
-
-      try {
-        await fetch(WEBHOOK_URL, {
-          method: "POST",
-          headers: { "Content-Type":"application/json" },
-          body: JSON.stringify({
-            prospectId, videoId, secondsWatched, duration, percent,
-            sessionId, userAgent, final
-          })
-        });
-      } catch(e) {
-        // silencieux pour MVP
-      }
-    }
-
-    // Envoi à la fin et quand l'onglet se ferme
-    player.addEventListener('ended', () => sendSummary(true));
-    window.addEventListener('beforeunload', () => sendSummary(true));
-  </script>
-</body>
-</html>
+    /* === CONFIG === */
+    con
