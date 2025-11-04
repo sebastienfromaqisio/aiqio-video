@@ -14,8 +14,6 @@
     :root { color-scheme: dark; }
     body{ margin:0; background:#0b0b0b; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
     .wrap{ display:grid; place-items:center; min-height:100dvh; padding:24px; gap:14px; }
-    h1{ margin:0; font-size:22px; font-weight:700; opacity:.95; }
-    .sub{ opacity:.7; font-size:.95rem; margin-top:-6px; }
 
     .player{
       width:min(960px,100%);
@@ -47,8 +45,7 @@
     }
 
     .note{ opacity:.7; margin-top:4px; font-size:.9rem; text-align:center; }
-
-    /* Popup Calendly (préchargée, invisible au départ) */
+    /* Popup Calendly */
     .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:grid; place-items:center; z-index:9999;
       transition:opacity .18s, visibility .18s; }
     .overlay.hidden{ opacity:0; visibility:hidden; pointer-events:none; }
@@ -63,14 +60,10 @@
     .calendly-inline-widget{ width:100%; height:100%; }
   </style>
 
-  <!-- Script Calendly (chargé d’emblée) -->
   <script src="https://assets.calendly.com/assets/external/widget.js" async></script>
 </head>
 <body>
   <div class="wrap">
-    <h1 id="headline">Vidéo personnalisée</h1>
-    <div id="subtitle" class="sub"></div>
-
     <div class="player">
       <!-- CTA -->
       <button id="ctaBtn" class="cta-btn" aria-label="Prendre rendez-vous">Prendre RDV</button>
@@ -103,80 +96,59 @@
 
   <script>
     /********************
-     * PARAMÈTRE p = {NameNoSpaces}[-{ideeSlug}]{VideoId32hex}
-     * Ex: ?p=JulieDupont5032da31754eb596edf1e9d68cbe031e
-     *     ?p=JulieDupont-autoconsommation5032da31754eb596edf1e9d68cbe031e
+     * URL attendue : ?f=prenom&l=nom&id=videoId
      ********************/
     const qs = new URLSearchParams(location.search);
-    const p  = (qs.get("p") || "").trim();
+    const firstRaw = qs.get("f") || "";
+    const lastRaw  = qs.get("l") || "";
+    const idRaw    = qs.get("id") || "";
 
-    // Defaults de repli
-    let VIDEO_ID = "5032da31754eb596edf1e9d68cbe031e";
-    let NAME     = "";
-    let IDEE     = "";
-
-    function parsePParam(raw){
-      if(!raw || raw.length < 33) return;
-
-      const tail = raw.slice(-32);
-      if(/^[a-f0-9]{32}$/i.test(tail)){
-        VIDEO_ID = tail;
-        const head = raw.slice(0, raw.length - 32);
-
-        // S'il y a un tiret juste avant l'ID, on traite comme idée
-        const dash = head.lastIndexOf("-");
-        if(dash !== -1){
-          NAME = head.slice(0, dash);
-          IDEE = head.slice(dash+1);
-        }else{
-          NAME = head;
-        }
-
-        // Convertir CamelCase "JulieDupont" -> "Julie Dupont"
-        if(NAME){
-          NAME = NAME
-            .replace(/([a-z])([A-Z])/g, "$1 $2")
-            .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-            .trim();
-        }
-      }
+    // Normalisation basique du prénom/nom (Majuscule initiale, reste minuscule)
+    function niceCase(s){
+      if(!s) return "";
+      try {
+        s = decodeURIComponent(s);
+      } catch(_) {}
+      return s.trim()
+              .replace(/_/g, " ")
+              .replace(/\s+/g, " ")
+              .toLowerCase()
+              .replace(/(^|\s|-)\p{L}/gu, m => m.toUpperCase());
     }
-    parsePParam(p);
+    const firstName = niceCase(firstRaw);
+    const lastName  = niceCase(lastRaw);
 
-    // Titre & sous-titre
-    const h1 = document.getElementById("headline");
-    const sub= document.getElementById("subtitle");
-    if(NAME){ h1.textContent = `Pour ${NAME}`; document.title = `Pour ${NAME} • Vidéo personnalisée`; }
-    sub.textContent = IDEE ? `Idée : ${IDEE}` : "";
+    // ID vidéo (32 hex attendu, sinon valeur par défaut)
+    const DEFAULT_ID = "5032da31754eb596edf1e9d68cbe031e";
+    const VIDEO_ID = /^[a-f0-9]{32}$/i.test(idRaw) ? idRaw : DEFAULT_ID;
 
-    /********************
-     * Calendly
-     ********************/
-    const calOverlay = document.getElementById('calOverlay');
-    const calClose   = document.getElementById('calClose');
-    const ctaBtn     = document.getElementById('ctaBtn');
-    const calWidget  = document.getElementById('calendly');
-
-    function openCalendly(){ calOverlay.classList.remove('hidden'); calOverlay.setAttribute('aria-hidden','false'); }
-    function closeCalendly(){ calOverlay.classList.add('hidden'); calOverlay.setAttribute('aria-hidden','true'); }
-    calClose.addEventListener('click', closeCalendly);
-    ctaBtn.addEventListener('click', openCalendly);
-    window.addEventListener('keydown', e => { if (e.key === 'Escape') closeCalendly(); });
-
-    /********************
-     * Player + Tracking (léger)
-     ********************/
+    // Définir player
     const playerIframe = document.getElementById("stream-player");
     playerIframe.src = `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?autoplay=true&muted=true`;
 
+    // CTA : « Prénom, réservez un RDV ! » (si prénom fourni)
+    const ctaBtn = document.getElementById('ctaBtn');
+    ctaBtn.textContent = firstName ? `${firstName}, réservez un RDV !` : `Réservez un RDV !`;
+
+    // Calendly
+    const calOverlay = document.getElementById('calOverlay');
+    const calClose   = document.getElementById('calClose');
+    const calWidget  = document.getElementById('calendly');
+    function openCalendly(){ calOverlay.classList.remove('hidden'); calOverlay.setAttribute('aria-hidden','false'); }
+    function closeCalendly(){ calOverlay.classList.add('hidden'); calOverlay.setAttribute('aria-hidden','true'); }
+    ctaBtn.addEventListener('click', openCalendly);
+    calClose.addEventListener('click', closeCalendly);
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') closeCalendly(); });
+
+    // Tracking minimal (seconds watched)
     const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz9alEU_7igvcCej_rumzU7mtVQFYiCbUmczzNXpXVzU-1Uz37hHUhAe90z_I4Vstus/exec";
-    const prospectId  = p || "unknown";
-
-    function show(msg){ const el=document.getElementById('debug'); if(el) el.textContent=msg; }
-
+    const prospectId  = `${firstName}${lastName}-${VIDEO_ID}`;
     const player = Stream(playerIframe);
+
     let ended=false, duration=0, watchedMap=Object.create(null), lastSecSent=-1;
     let sessionId = (crypto.randomUUID && crypto.randomUUID()) || (Date.now()+"-"+Math.random());
+
+    function show(msg){ const el=document.getElementById('debug'); if(el) el.textContent=msg; }
 
     (async () => {
       try{ await player.play(); } catch{ try{ player.muted = true; await player.play(); } catch(_){} }
@@ -193,7 +165,7 @@
               sendSummary(false);
             }
           }
-          show(`Session: ${sessionId} — ${Object.keys(watchedMap).length}s / ${duration||0}s`);
+          show(`${firstName||"Prospect"} — ${Object.keys(watchedMap).length}s / ${duration||0}s`);
         }catch(_){}
       }, 1000);
     })();
