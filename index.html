@@ -6,64 +6,24 @@
   <title>Vidéo de prospection Aqisio</title>
   <style>
     :root { color-scheme: dark; }
-    body {
-      margin: 0;
-      background: #0b0b0b;
-      color: #fff;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    }
-    .wrap {
-      display: grid;
-      place-items: center;
-      min-height: 100dvh;
-      padding: 24px;
-    }
-    .player {
-      width: min(960px, 100%);
-      aspect-ratio: 16/9;
-      position: relative;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      border-radius: 16px;
-    }
-    .note {
-      opacity: .7;
-      margin-top: 12px;
-      font-size: .9rem;
-    }
-
-    /* Bloc Calendly inline (caché au départ) */
-    #calendly-block {
-      display: none;              /* <- passe à block quand la vidéo se termine */
-      width: min(960px, 100%);
-      margin: 24px auto;
-    }
+    body{ margin:0; background:#0b0b0b; color:#fff;
+          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    .wrap{ display:grid; place-items:center; min-height:100dvh; padding:24px; }
+    .player{ width:min(960px,100%); aspect-ratio:16/9; position:relative; }
+    iframe{ width:100%; height:100%; border:0; border-radius:16px; }
+    .note{ opacity:.7; margin-top:12px; font-size:.9rem; text-align:center; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="player">
-      <!-- Cloudflare Stream : ta vidéo type -->
+      <!-- Cloudflare Stream : ta vidéo -->
       <iframe id="stream-player"
         src="https://customer-g50chvgfq5q94nqo.cloudflarestream.com/5032da31754eb596edf1e9d68cbe031e/iframe?autoplay=true&muted=true"
         allow="autoplay; encrypted-media; picture-in-picture"
         allowfullscreen="true"></iframe>
     </div>
     <p class="note" id="debug"></p>
-
-    <!-- Calendly inline (embed) -->
-    <div id="calendly-block">
-      <!-- Début de widget en ligne Calendly -->
-      <div class="calendly-inline-widget"
-           data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1"
-           style="min-width:320px;height:700px;"></div>
-      <script type="text/javascript"
-              src="https://assets.calendly.com/assets/external/widget.js" async></script>
-      <!-- Fin de widget en ligne Calendly -->
-    </div>
   </div>
 
   <!-- SDK Cloudflare Stream -->
@@ -86,27 +46,23 @@
       duration    = 0;
       watchedMap  = Object.create(null);
       lastSecSent = -1;
-      document.getElementById("debug").textContent = "Session: " + sessionId;
+      show(`Session: ${sessionId}`);
     }
     newSession();
 
     /***** PLAYER *****/
     const player = Stream(document.getElementById("stream-player"));
-
-    // Autoplay robuste (mute fallback)
     player.play().catch(async () => {
       try { player.muted = true; await player.play(); } catch(_) {}
     });
 
-    // Rafraîchit la durée
     async function refreshDuration() {
       try { duration = Math.floor(await player.duration); } catch(_) {}
     }
-    refreshDuration();
-    setInterval(refreshDuration, 3000);
+    refreshDuration(); setInterval(refreshDuration, 3000);
 
     /***** TRACKING (ping conditionnel chaque seconde) *****/
-    async function tick() {
+    setInterval(async () => {
       if (ended) return;
       try {
         const paused = await player.paused;
@@ -122,8 +78,7 @@
           }
         }
       } catch(_) {}
-    }
-    setInterval(tick, 1000);
+    }, 1000);
 
     function computeSummary() {
       const secondsWatched = Object.keys(watchedMap).length;
@@ -135,10 +90,7 @@
 
     async function sendSummary(final=false) {
       const { secondsWatched, percent } = computeSummary();
-      document.getElementById("debug").textContent =
-        `Session: ${sessionId} — ${secondsWatched}s / ${duration}s (${percent}%)` +
-        (final ? " [final]" : "");
-
+      show(`Session: ${sessionId} — ${secondsWatched}s / ${duration}s (${percent}%)` + (final ? " [final]" : ""));
       const payload = {
         prospectId,
         videoId: VIDEO_ID,
@@ -149,7 +101,6 @@
         userAgent,
         final
       };
-
       try {
         await fetch(WEBHOOK_URL, {
           method: "POST",
@@ -158,28 +109,21 @@
       } catch(e) {}
     }
 
-    // Fin de vidéo → ping final, stop ping, affiche Calendly inline
     player.addEventListener("ended", () => {
       if (ended) return;
       ended = true;
       sendSummary(true);
-
-      // Affiche le bloc Calendly et scroll dessus
-      const block = document.getElementById("calendly-block");
-      block.style.display = "block";
-      block.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    // Replay → nouvelle session si redémarrage au début
     player.addEventListener("play", async () => {
       if (!ended) return;
       try {
         const t = await player.currentTime;
-        if (t < 1) {
-          newSession(); // nouvelle ligne (session) côté Sheets
-        }
+        if (t < 1) newSession(); // replay = nouvelle session
       } catch(_) {}
     });
+
+    function show(msg){ document.getElementById("debug").textContent = msg; }
   </script>
 </body>
 </html>
