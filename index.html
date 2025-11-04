@@ -12,6 +12,22 @@
     .player{ width:min(960px,100%); aspect-ratio:16/9; position:relative; }
     iframe{ width:100%; height:100%; border:0; border-radius:16px; }
     .note{ opacity:.7; margin-top:12px; font-size:.9rem; text-align:center; }
+
+    /* Calendly inline (caché jusqu'à la fin) */
+    #calendly-block{
+      display:none;
+      width:min(960px,100%);
+      margin:24px auto 32px;
+      background:#111;
+      border-radius:12px;
+      padding:12px;
+    }
+    #calendly-title{
+      margin:0 0 8px 0;
+      font-size:1.1rem;
+      opacity:.9;
+      text-align:center;
+    }
   </style>
 </head>
 <body>
@@ -23,7 +39,18 @@
         allow="autoplay; encrypted-media; picture-in-picture"
         allowfullscreen="true"></iframe>
     </div>
+
+    <!-- Compteur / debug -->
     <p class="note" id="debug"></p>
+
+    <!-- Calendly inline (apparaît automatiquement à la fin) -->
+    <section id="calendly-block">
+      <h2 id="calendly-title">Merci d’avoir regardé 🙌 — Réserve un créneau ci-dessous</h2>
+      <div id="calendly-widget"
+           class="calendly-inline-widget"
+           data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1"
+           style="min-width:320px;height:700px;"></div>
+    </section>
   </div>
 
   <!-- SDK Cloudflare Stream -->
@@ -36,73 +63,39 @@
     const qs          = new URLSearchParams(location.search);
     const prospectId  = qs.get("p") || "unknown";
 
-    /***** UA PARSER (léger) *****/
+    /***** Enrichissements (déjà en place dans ta V2) *****/
     function parseUA(ua) {
       ua = ua || navigator.userAgent || '';
-      // OS
-      let osName = 'Unknown', osVersion = '';
-      if (/Windows NT/i.test(ua)) {
-        osName = 'Windows';
-        const m = ua.match(/Windows NT ([\d\.]+)/i); osVersion = m ? m[1] : '';
-      } else if (/Mac OS X/i.test(ua) && !/like Mac OS X/.test(ua)) {
-        osName = 'macOS';
-        const m = ua.match(/Mac OS X ([\d_]+)/i); osVersion = m ? m[1].replace(/_/g,'.') : '';
-      } else if (/iPhone|iPad|iPod/i.test(ua)) {
-        osName = 'iOS';
-        const m = ua.match(/OS ([\d_]+) like Mac OS X/i); osVersion = m ? m[1].replace(/_/g,'.') : '';
-      } else if (/Android/i.test(ua)) {
-        osName = 'Android';
-        const m = ua.match(/Android ([\d\.]+)/i); osVersion = m ? m[1] : '';
-      } else if (/Linux/i.test(ua)) {
-        osName = 'Linux';
-      }
-
-      // Browser
-      let browserName = 'Unknown', browserVersion = '';
-      if (/Edg\//.test(ua)) {
-        browserName = 'Edge'; const m = ua.match(/Edg\/([\d\.]+)/); browserVersion = m ? m[1] : '';
-      } else if (/OPR\//.test(ua)) {
-        browserName = 'Opera'; const m = ua.match(/OPR\/([\d\.]+)/); browserVersion = m ? m[1] : '';
-      } else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) {
-        browserName = 'Chrome'; const m = ua.match(/Chrome\/([\d\.]+)/); browserVersion = m ? m[1] : '';
-      } else if (/Safari\//.test(ua) && /Version\//.test(ua) && !/Chrome|Chromium/.test(ua)) {
-        browserName = 'Safari'; const m = ua.match(/Version\/([\d\.]+)/); browserVersion = m ? m[1] : '';
-      } else if (/Firefox\//.test(ua)) {
-        browserName = 'Firefox'; const m = ua.match(/Firefox\/([\d\.]+)/); browserVersion = m ? m[1] : '';
-      } else if (/Chromium\//.test(ua)) {
-        browserName = 'Chromium'; const m = ua.match(/Chromium\/([\d\.]+)/); browserVersion = m ? m[1] : '';
-      }
-
-      // Device type
-      let deviceType = 'desktop';
-      if (/Tablet|iPad/i.test(ua)) deviceType = 'tablet';
-      else if (/Mobile|iPhone|Android.*Mobile/i.test(ua)) deviceType = 'mobile';
-
+      let osName='Unknown', osVersion='', browserName='Unknown', browserVersion='', deviceType='desktop';
+      if (/Windows NT/i.test(ua)){ osName='Windows'; const m=ua.match(/Windows NT ([\d\.]+)/i); osVersion=m?m[1]:''; }
+      else if (/Mac OS X/i.test(ua) && !/like Mac OS X/.test(ua)){ osName='macOS'; const m=ua.match(/Mac OS X ([\d_]+)/i); osVersion=m?m[1].replace(/_/g,'.'):''; }
+      else if (/iPhone|iPad|iPod/i.test(ua)){ osName='iOS'; const m=ua.match(/OS ([\d_]+) like Mac OS X/i); osVersion=m?m[1].replace(/_/g,'.'):''; }
+      else if (/Android/i.test(ua)){ osName='Android'; const m=ua.match(/Android ([\d\.]+)/i); osVersion=m?m[1]:''; }
+      else if (/Linux/i.test(ua)){ osName='Linux'; }
+      if (/Edg\//.test(ua)){ browserName='Edge'; const m=ua.match(/Edg\/([\d\.]+)/); browserVersion=m?m[1]:''; }
+      else if (/OPR\//.test(ua)){ browserName='Opera'; const m=ua.match(/OPR\/([\d\.]+)/); browserVersion=m?m[1]:''; }
+      else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)){ browserName='Chrome'; const m=ua.match(/Chrome\/([\d\.]+)/); browserVersion=m?m[1]:''; }
+      else if (/Safari\//.test(ua) && /Version\//.test(ua) && !/Chrome|Chromium/.test(ua)){ browserName='Safari'; const m=ua.match(/Version\/([\d\.]+)/); browserVersion=m?m[1]:''; }
+      else if (/Firefox\//.test(ua)){ browserName='Firefox'; const m=ua.match(/Firefox\/([\d\.]+)/); browserVersion=m?m[1]:''; }
+      else if (/Chromium\//.test(ua)){ browserName='Chromium'; const m=ua.match(/Chromium\/([\d\.]+)/); browserVersion=m?m[1]:''; }
+      if (/Tablet|iPad/i.test(ua)) deviceType='tablet';
+      else if (/Mobile|iPhone|Android.*Mobile/i.test(ua)) deviceType='mobile';
       return { browserName, browserVersion, osName, osVersion, deviceType };
     }
-
-    // Infos “faciles”
     const language  = navigator.language || '';
     const timezone  = (Intl.DateTimeFormat().resolvedOptions().timeZone) || '';
     const screen_resolution = `${(window.screen && window.screen.width) || 0}x${(window.screen && window.screen.height) || 0}`;
     const ua = navigator.userAgent || '';
     const { browserName, browserVersion, osName, osVersion, deviceType } = parseUA(ua);
 
-    /***** REPLAY COUNT (par prospect et device) *****/
-    // stocké en localStorage pour ce prospect (device local)
+    /***** REPLAY COUNT (inchangé) *****/
     function getReplayKey(pid){ return `aqisio:replay:${pid}`; }
-    function getReplayCount(pid) {
-      const v = Number(localStorage.getItem(getReplayKey(pid)) || 0);
-      return isFinite(v) && v >= 0 ? v : 0;
-    }
-    function incReplayCount(pid) {
-      const v = getReplayCount(pid) + 1;
-      localStorage.setItem(getReplayKey(pid), String(v));
-      return v;
-    }
+    function getReplayCount(pid){ const v=Number(localStorage.getItem(getReplayKey(pid))||0); return isFinite(v)&&v>=0?v:0; }
+    function incReplayCount(pid){ const v=getReplayCount(pid)+1; localStorage.setItem(getReplayKey(pid), String(v)); return v; }
 
     /***** ÉTAT DE SESSION *****/
     let sessionId, ended, duration, watchedMap, lastSecSent, isReplay, replayCount;
+    function show(msg){ const el=document.getElementById("debug"); if(el) el.textContent=msg; }
 
     function newSession(markReplay=false) {
       sessionId   = (crypto.randomUUID && crypto.randomUUID()) || (Date.now()+"-"+Math.random());
@@ -110,109 +103,82 @@
       duration    = 0;
       watchedMap  = Object.create(null);
       lastSecSent = -1;
-
-      if (markReplay) {
-        isReplay    = true;
-        replayCount = incReplayCount(prospectId);
-      } else {
-        isReplay    = false;
-        // Ne pas incrémenter au tout premier lancement si compteur nul
-        if (getReplayCount(prospectId) === 0) localStorage.setItem(getReplayKey(prospectId), '0');
-        replayCount = getReplayCount(prospectId);
-      }
-      show(`Session: ${sessionId} — replays: ${replayCount}${isReplay ? ' (replay)' : ''}`);
+      if (markReplay){ isReplay=true; replayCount=incReplayCount(prospectId); }
+      else { isReplay=false; if (getReplayCount(prospectId)===0) localStorage.setItem(getReplayKey(prospectId),'0'); replayCount=getReplayCount(prospectId); }
+      show(`Session: ${sessionId} — replays: ${replayCount}${isReplay?' (replay)':''}`);
+      // Masque Calendly si on relance après un premier visionnage
+      document.getElementById('calendly-block').style.display = 'none';
     }
     newSession(false);
 
     /***** PLAYER *****/
     const player = Stream(document.getElementById("stream-player"));
-    player.play().catch(async () => {
-      try { player.muted = true; await player.play(); } catch(_) {}
-    });
+    player.play().catch(async () => { try { player.muted = true; await player.play(); } catch(_) {} });
 
-    async function refreshDuration() {
-      try { duration = Math.floor(await player.duration); } catch(_) {}
-    }
+    async function refreshDuration(){ try { duration = Math.floor(await player.duration); } catch(_) {} }
     refreshDuration(); setInterval(refreshDuration, 3000);
 
-    /***** TRACKING (ping conditionnel chaque seconde) *****/
+    /***** TRACKING (inchangé) *****/
     setInterval(async () => {
       if (ended) return;
-      try {
-        const paused = await player.paused;
-        if (paused) return;
-
-        const t = await player.currentTime;
-        const sec = Math.floor(t);
-        if (!watchedMap[sec]) {
-          watchedMap[sec] = true;
-          if (sec !== lastSecSent) {
-            lastSecSent = sec;
-            sendSummary(false);
-          }
-        }
-      } catch(_) {}
+      try{
+        const paused = await player.paused; if (paused) return;
+        const t = await player.currentTime; const sec = Math.floor(t);
+        if (!watchedMap[sec]){ watchedMap[sec]=true; if (sec!==lastSecSent){ lastSecSent=sec; sendSummary(false); } }
+      }catch(_){}
     }, 1000);
 
-    function computeSummary() {
+    function computeSummary(){
       const secondsWatched = Object.keys(watchedMap).length;
-      const percent = duration > 0
-        ? Math.min(100, Math.round((secondsWatched / duration) * 100))
-        : 0;
+      const percent = duration>0 ? Math.min(100, Math.round((secondsWatched/duration)*100)) : 0;
       return { secondsWatched, percent };
     }
 
-    async function sendSummary(final=false) {
+    async function sendSummary(final=false){
       const { secondsWatched, percent } = computeSummary();
       show(`Session: ${sessionId} — ${secondsWatched}s / ${duration}s (${percent}%) — replays:${replayCount}${isReplay?' (replay)':''}` + (final ? " [final]" : ""));
-
       const payload = {
-        prospectId,
-        videoId: VIDEO_ID,
-        secondsWatched,
-        duration,
-        percent,
-        sessionId,
-        userAgent: ua,
-        final,
-        // enrichissements
-        language,
-        timezone,
-        screen_resolution,
-        device_type: deviceType,
-        browser_name: browserName,
-        browser_version: browserVersion,
-        os_name: osName,
-        os_version: osVersion,
-        is_replay: isReplay,
-        replay_count: replayCount
+        prospectId, videoId: VIDEO_ID, secondsWatched, duration, percent,
+        sessionId, userAgent: ua, final,
+        language, timezone, screen_resolution,
+        device_type: deviceType, browser_name: browserName, browser_version: browserVersion,
+        os_name: osName, os_version: osVersion, is_replay: isReplay, replay_count: replayCount
       };
-
-      try {
-        await fetch(WEBHOOK_URL, {
-          method: "POST",
-          body: JSON.stringify(payload) // aucun header -> évite preflight CORS
-        });
-      } catch(e) {}
+      try { await fetch(WEBHOOK_URL, { method:"POST", body: JSON.stringify(payload) }); } catch(e){}
     }
 
-    // Fin de vidéo → ping final, stop ping
+    /***** CALENDLY : apparition automatique à la fin *****/
+    let calendlyLoaded = false;
+    function loadCalendlyScriptOnce(){
+      if (calendlyLoaded) return;
+      calendlyLoaded = true;
+      const s = document.createElement('script');
+      s.src = "https://assets.calendly.com/assets/external/widget.js";
+      s.async = true;
+      document.body.appendChild(s);
+    }
+    function showCalendly(){
+      // charge le script si besoin, puis affiche le bloc
+      loadCalendlyScriptOnce();
+      const block = document.getElementById('calendly-block');
+      block.style.display = 'block';
+      // scroll doux pour mettre le widget en vue (mobile/desktop)
+      block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Fin de vidéo → ping final, puis afficher Calendly
     player.addEventListener("ended", () => {
       if (ended) return;
       ended = true;
       sendSummary(true);
+      showCalendly();
     });
 
-    // Replay → nouvelle session (marquée replay) si relance au début
+    // Replay → nouvelle session (Calendly sera recaché par newSession)
     player.addEventListener("play", async () => {
       if (!ended) return;
-      try {
-        const t = await player.currentTime;
-        if (t < 1) newSession(true);
-      } catch(_) {}
+      try { const t = await player.currentTime; if (t < 1) newSession(true); } catch(_){}
     });
-
-    function show(msg){ const el = document.getElementById("debug"); if (el) el.textContent = msg; }
   </script>
 </body>
 </html>
