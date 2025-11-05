@@ -31,12 +31,11 @@
       overflow:hidden;
       box-shadow:0 10px 40px rgba(0,0,0,.45);
       background:#000;
-      user-select:none;
     }
     .player iframe{
       width:100%; height:100%;
       border:0; border-radius:16px;
-      position:relative; z-index:1; display:block;
+      display:block;
     }
 
     /* CTA */
@@ -45,7 +44,7 @@
       background:#0156CC; color:#fff; border:0; border-radius:16px;
       padding:20px 36px; font-weight:700; font-size:22px; line-height:1;
       cursor:pointer; box-shadow:0 8px 24px rgba(1,86,204,.45);
-      transition:transform .12s, opacity .12s, box-shadow .12s; pointer-events:auto;
+      transition:transform .12s, opacity .12s, box-shadow .12s;
     }
     .cta-btn:hover{ transform:translateY(-2px); box-shadow:0 10px 30px rgba(1,86,204,.55); }
     .cta-btn:active{ transform:translateY(0); opacity:.95; }
@@ -76,11 +75,11 @@
         <!-- Cloudflare Stream -->
         <iframe
           id="stream-player"
-          src="https://iframe.videodelivery.net/UID?controls=true&playsinline=true&defaultTextTrack=fr"
+          src=""
           allow="autoplay; encrypted-media; picture-in-picture"
           allowfullscreen="true">
         </iframe>
-
+      </div>
 
       <!-- CTA -->
       <button id="ctaBtn" class="cta-btn" aria-label="Prendre rendez-vous">📞 Réservez un Rendez-Vous !</button>
@@ -122,6 +121,7 @@
           : (chunk.charAt(0).toUpperCase() + chunk.slice(1).toLowerCase());
       }).join("");
     }
+
     const firstName = niceCase(firstRaw);
     const lastName  = niceCase(lastRaw);
 
@@ -132,19 +132,18 @@
     const DEFAULT_ID = "5032da31754eb596edf1e9d68cbe031e";
     const VIDEO_ID = /^[a-f0-9]{32}$/i.test(idRaw) ? idRaw : DEFAULT_ID;
 
+    // ✅ Player sans autoplay ni muted : le son sera actif au clic utilisateur
     const playerIframe = document.getElementById("stream-player");
-
-    // Charger le player SANS autoplay et SANS muted : l'utilisateur cliquera dans l'iframe
     playerIframe.src =
-      `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?autoplay=false&muted=false&playsinline=true&defaultTextTrack=fr`;
+      `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?controls=true&playsinline=true&defaultTextTrack=fr`;
 
-    // Instancier le SDK (pour le tracking & events)
+    // Instancier le SDK (utile pour tracking)
     let player = null;
     playerIframe.addEventListener('load', () => {
       try { player = Stream(playerIframe); } catch(_) {}
     }, { once:true });
 
-    // Calendly
+    // --- CTA Calendly ---
     const ctaBtn = document.getElementById('ctaBtn');
     ctaBtn.textContent = firstName
       ? `📞 ${firstName}, Réservez un Rendez-Vous !`
@@ -158,7 +157,7 @@
     ctaBtn.addEventListener('click', openCalendly);
 
     /********************
-     * Tracking (démarre dès que la lecture commence)
+     * Tracking lecture
      ********************/
     const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz9alEU_7igvcCej_rumzU7mtVQFYiCbUmczzNXpXVzU-1Uz37hHUhAe90z_I4Vstus/exec";
     const prospectId  = `${firstName}${lastName}-${VIDEO_ID}`;
@@ -178,9 +177,7 @@
 
     function startTracking(){
       ended=false; watchedMap=Object.create(null); lastSecSent=-1;
-
       (async ()=>{ try{ duration = Math.floor(await player.duration); }catch(_){ duration = 0; } })();
-
       const intervalId = setInterval(async ()=>{
         if (!player || ended) { clearInterval(intervalId); return; }
         try{
@@ -202,24 +199,10 @@
       }, { once:true });
     }
 
-    // Dès que l'utilisateur clique sur Play dans l'iframe, la vidéo part avec son.
-    // On accroche le tracking sur le premier passage en "non-paused".
+    // Démarre le tracking à la première lecture réelle
     const waitPlayerReady = setInterval(async ()=>{
       if (!player) return;
       clearInterval(waitPlayerReady);
-      // Démarre le tracking à la première lecture
-      const watchPlay = async ()=>{
-        try{
-          const paused = await player.paused;
-          if (paused === false) {
-            player.removeEventListener('timeupdate', watchPlay);
-            startTracking();
-          }
-        }catch(_){}
-      };
-      // Certains environnements n’exposent pas 'timeupdate' via SDK, on fallback au poll
-      player.addEventListener('timeupdate', watchPlay);
-      // Fallback: poll au cas où
       const poll = setInterval(async ()=>{
         if (!player) return;
         try{
