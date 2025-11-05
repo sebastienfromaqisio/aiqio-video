@@ -109,15 +109,17 @@
     const lastRaw  = qs.get("l") || "";
     const idRaw    = qs.get("id") || "";
 
-    // Normalisation basique du prénom/nom
+    // Normalisation basique du prénom/nom (sans \p{L})
     function niceCase(s){
       if(!s) return "";
       try { s = decodeURIComponent(s); } catch(_) {}
-      return s.trim()
-              .replace(/_/g, " ")
-              .replace(/\s+/g, " ")
-              .toLowerCase()
-              .replace(/(^|\\s|-)\\p{L}/gu, m => m.toUpperCase());
+      s = s.trim().replace(/_/g," ").replace(/\s+/g," ");
+      // coupe sur espaces/traits d'union mais conserve les séparateurs
+      return s.split(/([\s-]+)/).map(chunk=>{
+        return /[\s-]+/.test(chunk)
+          ? chunk
+          : (chunk.charAt(0).toUpperCase() + chunk.slice(1).toLowerCase());
+      }).join("");
     }
     const firstName = niceCase(firstRaw);
     const lastName  = niceCase(lastRaw);
@@ -131,7 +133,7 @@
     const DEFAULT_ID = "5032da31754eb596edf1e9d68cbe031e";
     const VIDEO_ID = /^[a-f0-9]{32}$/i.test(idRaw) ? idRaw : DEFAULT_ID;
 
-    // Définir player (ajout de defaultTextTrack=fr)
+    // Définir player (captions auto ON)
     const playerIframe = document.getElementById("stream-player");
     playerIframe.src = `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?autoplay=true&muted=true&defaultTextTrack=fr`;
 
@@ -151,7 +153,7 @@
     window.addEventListener('keydown', e => { if (e.key === 'Escape') e.preventDefault(); });
     calOverlay.addEventListener('click', (e) => { e.stopPropagation(); });
 
-    // Tracking minimal (seconds watched) — conservé
+    // Tracking minimal (seconds watched)
     const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz9alEU_7igvcCej_rumzU7mtVQFYiCbUmczzNXpXVzU-1Uz37hHUhAe90z_I4Vstus/exec";
     const prospectId  = `${firstName}${lastName}-${VIDEO_ID}`;
     const player = Stream(playerIframe);
