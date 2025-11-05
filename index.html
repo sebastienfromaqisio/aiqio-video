@@ -213,8 +213,8 @@
       const meta = getClientMeta();
       const { secondsWatched, pct } = computeSummary();
       return {
-        // colonnes attendues par Apps Script
-        timestamp: new Date().toISOString(),   // non lu par Apps Script (timestamp est mis côté serveur à la création), ok de l'envoyer
+        // clés attendues par Apps Script
+        timestamp: new Date().toISOString(),
         prospectId: prospectId,
         videoId: VIDEO_ID,
         secondsWatched: secondsWatched,
@@ -236,19 +236,22 @@
       };
     }
 
+    // 🔧 PATCH ANTI-PREFLIGHT : pas de Content-Type JSON → pas d'OPTIONS CORS
     async function postJSON(url, data, keepalive=false){
-      try{
-        if (keepalive && navigator.sendBeacon) {
+      // Utilise sendBeacon quand on quitte la page
+      if (keepalive && navigator.sendBeacon) {
+        try {
           const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
           navigator.sendBeacon(url, blob);
           return;
-        }
-      }catch(_){}
+        } catch(_) {}
+      }
       try{
         await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          // surtout pas de headers ici
           body: JSON.stringify(data),
+          // mode: "no-cors", // inutile, on ne lit pas la réponse
           keepalive: !!keepalive
         });
       }catch(_){}
