@@ -14,6 +14,7 @@
     :root { color-scheme: dark; }
     body{ margin:0; background:#0b0b0b; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
     .wrap{ display:grid; place-items:center; min-height:100dvh; padding:24px; gap:14px; }
+
     .stage{
       width:min(960px,100%);
       display:flex;
@@ -21,6 +22,7 @@
       align-items:flex-end;
       gap:14px;
     }
+
     .player{
       width:100%;
       aspect-ratio:16/9;
@@ -36,6 +38,7 @@
       border:0; border-radius:16px;
       position:relative; z-index:1; display:block;
     }
+
     /* Overlay Play */
     .play-mask{
       position:absolute; inset:0; z-index:2;
@@ -62,6 +65,7 @@
       border-left:28px solid #fff;
     }
     .hint{ margin-top:14px; font-size:.95rem; opacity:.9; text-align:center; }
+
     /* CTA */
     .cta-btn{
       position:static;
@@ -77,6 +81,7 @@
       .play-btn{ width:92px; height:92px; }
       .play-icon{ border-top-width:14px; border-bottom-width:14px; border-left-width:22px; }
     }
+
     /* Calendly modal */
     .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:grid; place-items:center; z-index:9999;
       transition:opacity .18s, visibility .18s; }
@@ -165,11 +170,13 @@
     const playerIframe = document.getElementById("stream-player");
     const playMask     = document.getElementById("playMask");
 
+    // CTA : « 📞 Prénom, Réservez un Rendez-Vous ! »
     const ctaBtn = document.getElementById('ctaBtn');
     ctaBtn.textContent = firstName
       ? `📞 ${firstName}, Réservez un Rendez-Vous !`
       : `📞 Réservez un Rendez-Vous !`;
 
+    // Calendly (ouverture uniquement, pas de fermeture)
     const calOverlay = document.getElementById('calOverlay');
     function openCalendly(){
       calOverlay.classList.remove('hidden');
@@ -232,8 +239,19 @@
         // Cache l'overlay
         playMask.classList.add('hidden');
 
-        // Lecture avec son
-        try { player.muted = false; await player.play(); } catch (e) { /* l'utilisateur peut recliquer si besoin */ }
+        // Lecture avec son (forcer volume & unmute)
+        try {
+          player.muted = false;
+          player.volume = 1.0;
+          await player.play();
+        } catch (e) {
+          console.warn("Lecture bloquée, recliquer si nécessaire.", e);
+        }
+
+        // Sécurité : si volume = 0 non voulu
+        player.addEventListener('volumechange', () => {
+          if (player.volume === 0 && !player.muted) player.volume = 1.0;
+        });
 
         // Init tracking
         ended = false;
