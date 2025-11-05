@@ -180,7 +180,7 @@
       else if (/Linux/.test(ua)) { os_name="Linux"; os_version=""; }
 
       return {
-        user_agent: ua,
+        userAgent: ua,
         language: navigator.language || "",
         timezone: (Intl.DateTimeFormat().resolvedOptions().timeZone || ""),
         screen_resolution: `${window.screen.width}x${window.screen.height}`,
@@ -209,19 +209,20 @@
       return { secondsWatched, pct };
     }
 
-    function buildPayload(final=false){
+    function buildPayload(isFinal=false){
       const meta = getClientMeta();
       const { secondsWatched, pct } = computeSummary();
       return {
-        timestamp: new Date().toISOString(),
-        prospect_id: prospectId,
-        video_id: VIDEO_ID,
-        seconds_watched: secondsWatched,
+        // colonnes attendues par Apps Script
+        timestamp: new Date().toISOString(),   // non lu par Apps Script (timestamp est mis côté serveur à la création), ok de l'envoyer
+        prospectId: prospectId,
+        videoId: VIDEO_ID,
+        secondsWatched: secondsWatched,
         duration: duration,
         percent: pct,
-        session_id: sessionId,
-        user_agent: meta.user_agent,
-        final: !!final,
+        sessionId: sessionId,
+        userAgent: meta.userAgent,
+        final: !!isFinal,
         language: meta.language,
         timezone: meta.timezone,
         screen_resolution: meta.screen_resolution,
@@ -237,7 +238,6 @@
 
     async function postJSON(url, data, keepalive=false){
       try{
-        // Essai sendBeacon si keepalive (fermeture d’onglet)
         if (keepalive && navigator.sendBeacon) {
           const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
           navigator.sendBeacon(url, blob);
@@ -254,18 +254,15 @@
       }catch(_){}
     }
 
-    async function sendSummary(final=false, keepalive=false){
-      const payload = buildPayload(final);
-      await postJSON(WEBHOOK_URL, payload, keepalive);
+    async function sendSummary(isFinal=false, keepalive=false){
+      await postJSON(WEBHOOK_URL, buildPayload(isFinal), keepalive);
     }
 
-    // Ping "play détecté" : prouve que l’utilisateur a cliqué Play.
+    // Ping "play détecté" (lecture manuelle même si 0s vues)
     async function sendPlayStarted(){
       if (hasSentPlay) return;
       hasSentPlay = true;
-      const payload = buildPayload(false);
-      // seconds_watched/percent peuvent être à 0, c’est normal pour marquer le démarrage
-      await postJSON(WEBHOOK_URL, payload);
+      await postJSON(WEBHOOK_URL, buildPayload(false));
     }
 
     function startTracking(){
@@ -300,13 +297,11 @@
       if (!player) return;
       clearInterval(waitPlayerReady);
 
-      // Écoute explicite du "play" (utile pour marquer played même si 0s)
       player.addEventListener("play", async ()=>{
         if (ended) {
           // Nouvelle lecture après une fin → replay
           replayCount += 1;
           isReplay = true;
-          // On relance un nouveau cycle de tracking
           startTracking();
         } else {
           // Première lecture de la session
@@ -319,7 +314,6 @@
     // Sauvegarde finale si l’utilisateur ferme/rafraîchit
     window.addEventListener("beforeunload", function(){
       try{
-        // keepalive/beacon : meilleures chances d’atteindre Apps Script
         sendSummary(true, /*keepalive*/ true);
       }catch(_){}
     });
