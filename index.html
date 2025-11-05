@@ -104,7 +104,7 @@
 
   <script>
     /********************
-     * URL attendue : ?f=prenom&l=nom&id=videoId
+     * URL attendue : ?f=prenom&l=nom&id=videoId (id = 32 hex)
      ********************/
     const qs = new URLSearchParams(location.search);
     const firstRaw = qs.get("f") || "";
@@ -124,7 +124,6 @@
 
     const firstName = niceCase(firstRaw);
     const lastName  = niceCase(lastRaw);
-
     document.title = (firstName || lastName)
       ? `${firstName} ${lastName} - Regardez la Vidéo`
       : `Regardez la Vidéo — Aqisio`;
@@ -132,18 +131,17 @@
     const DEFAULT_ID = "5032da31754eb596edf1e9d68cbe031e";
     const VIDEO_ID = /^[a-f0-9]{32}$/i.test(idRaw) ? idRaw : DEFAULT_ID;
 
-    // ✅ Player (pas d'autoplay/muted) : lecture déclenchée par l'utilisateur
+    /* ========= Player ========= */
     const playerIframe = document.getElementById("stream-player");
     playerIframe.src =
       `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?controls=true&playsinline=true&defaultTextTrack=fr`;
 
-    // Instancier le SDK (utile pour tracking)
     let player = null;
     playerIframe.addEventListener('load', () => {
       try { player = Stream(playerIframe); } catch(_) {}
     }, { once:true });
 
-    // --- CTA Calendly ---
+    /* ========= CTA Calendly ========= */
     const ctaBtn = document.getElementById('ctaBtn');
     ctaBtn.textContent = firstName
       ? `📞 ${firstName}, Réservez un Rendez-Vous !`
@@ -156,28 +154,26 @@
     }
     ctaBtn.addEventListener('click', openCalendly);
 
-    /********************
-     * Utils parsing UA / device
-     ********************/
+    /* ========= Meta client ========= */
     function getClientMeta(){
       const ua = navigator.userAgent || "";
       let browser_name = "Unknown", browser_version = "", os_name = "Unknown", os_version = "", device_type = /Mobi/i.test(ua) ? "mobile" : "desktop";
 
       // Navigateur
-      if (/Edg\/([\d.]+)/.test(ua)) { browser_name="Edge";   browser_version=RegExp.$1; }
-      else if (/OPR\/([\d.]+)/.test(ua)) { browser_name="Opera";  browser_version=RegExp.$1; }
-      else if (/Chrome\/([\d.]+)/.test(ua)) { browser_name="Chrome"; browser_version=RegExp.$1; }
-      else if (/Firefox\/([\d.]+)/.test(ua)) { browser_name="Firefox"; browser_version=RegExp.$1; }
-      else if (/Version\/([\d.]+).*Safari/.test(ua)) { browser_name="Safari"; browser_version=RegExp.$1; }
-      else if (/Safari\/([\d.]+)/.test(ua)) { browser_name="Safari"; browser_version=RegExp.$1; }
+      if (/Edg\/([\d.]+)/.test(ua))      { browser_name="Edge";    browser_version=RegExp.$1; }
+      else if (/OPR\/([\d.]+)/.test(ua)) { browser_name="Opera";   browser_version=RegExp.$1; }
+      else if (/Chrome\/([\d.]+)/.test(ua)){ browser_name="Chrome";  browser_version=RegExp.$1; }
+      else if (/Firefox\/([\d.]+)/.test(ua)){ browser_name="Firefox"; browser_version=RegExp.$1; }
+      else if (/Version\/([\d.]+).*Safari/.test(ua)){ browser_name="Safari"; browser_version=RegExp.$1; }
+      else if (/Safari\/([\d.]+)/.test(ua)){ browser_name="Safari"; browser_version=RegExp.$1; }
 
       // OS
-      if (/Windows NT ([\d.]+)/.test(ua)) { os_name="Windows"; os_version=RegExp.$1; }
-      else if (/Mac OS X ([\d_]+)/.test(ua)) { os_name="macOS"; os_version=RegExp.$1.replace(/_/g,'.'); }
-      else if (/\biPhone OS ([\d_]+)/.test(ua)) { os_name="iOS"; os_version=RegExp.$1.replace(/_/g,'.'); device_type="mobile"; }
-      else if (/\biPad; CPU OS ([\d_]+)/.test(ua)) { os_name="iOS"; os_version=RegExp.$1.replace(/_/g,'.'); device_type="mobile"; }
-      else if (/Android ([\d.]+)/.test(ua)) { os_name="Android"; os_version=RegExp.$1; device_type="mobile"; }
-      else if (/Linux/.test(ua)) { os_name="Linux"; os_version=""; }
+      if (/Windows NT ([\d.]+)/.test(ua))           { os_name="Windows"; os_version=RegExp.$1; }
+      else if (/Mac OS X ([\d_]+)/.test(ua))        { os_name="macOS";   os_version=RegExp.$1.replace(/_/g,'.'); }
+      else if (/\biPhone OS ([\d_]+)/.test(ua))     { os_name="iOS";     os_version=RegExp.$1.replace(/_/g,'.'); device_type="mobile"; }
+      else if (/\biPad; CPU OS ([\d_]+)/.test(ua))  { os_name="iOS";     os_version=RegExp.$1.replace(/_/g,'.'); device_type="mobile"; }
+      else if (/Android ([\d.]+)/.test(ua))         { os_name="Android"; os_version=RegExp.$1; device_type="mobile"; }
+      else if (/Linux/.test(ua))                    { os_name="Linux";   os_version=""; }
 
       return {
         userAgent: ua,
@@ -192,19 +188,22 @@
       };
     }
 
-    /********************
-     * Tracking lecture
-     ********************/
-    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz9alEU_7igvcCej_rumzU7mtVQFYiCbUmczzNXpXVzU-1Uz37hHUhAe90z_I4Vstus/exec";
+    /* ========= Tracking =========
+       - Agrège les secondes vues DISTINCTES via Set => secondsWatched fiable
+       - Envoie un ping à chaque seconde + un final sur ended / beforeunload
+       - Gère les relectures (replay_count / is_replay)
+    ================================= */
+    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzPt-Ig6VoKckcRxNSFXP6ediI0aJsHFmYHJ-z3-FaUhBwSIGvp3AgHvgVxqb8axb20hg/exec"; // << Ton webhook confirmé
     const prospectId  = `${firstName}${lastName}-${VIDEO_ID}`;
     const sessionId   = (crypto.randomUUID && crypto.randomUUID()) || (Date.now()+"-"+Math.random());
-    let ended=false, duration=0, watchedMap=null, lastSecSent=-1;
-    let hasSentPlay=false;
-    let replayCount=0;     // 0 = première lecture
+    let ended=false, duration=0;
+    const watchedSeconds = new Set();
+    let hasStarted=false;
+    let replayCount=0;
     let isReplay=false;
 
     function computeSummary(){
-      const secondsWatched = watchedMap ? Object.keys(watchedMap).length : 0;
+      const secondsWatched = watchedSeconds.size;
       const pct = duration>0 ? Math.min(100, Math.round((secondsWatched/duration)*100)) : 0;
       return { secondsWatched, pct };
     }
@@ -213,16 +212,23 @@
       const meta = getClientMeta();
       const { secondsWatched, pct } = computeSummary();
       return {
-        // clés attendues par Apps Script
-        timestamp: new Date().toISOString(),
+        // identifiants
         prospectId: prospectId,
         videoId: VIDEO_ID,
+        sessionId: sessionId,
+
+        // métriques
         secondsWatched: secondsWatched,
         duration: duration,
         percent: pct,
-        sessionId: sessionId,
-        userAgent: meta.userAgent,
+
+        // flags
         final: !!isFinal,
+        is_replay: !!isReplay,
+        replay_count: replayCount,
+
+        // meta client
+        userAgent: meta.userAgent,
         language: meta.language,
         timezone: meta.timezone,
         screen_resolution: meta.screen_resolution,
@@ -230,95 +236,89 @@
         browser_name: meta.browser_name,
         browser_version: meta.browser_version,
         os_name: meta.os_name,
-        os_version: meta.os_version,
-        is_replay: !!isReplay,
-        replay_count: replayCount
+        os_version: meta.os_version
       };
     }
 
-    // 🔧 PATCH ANTI-PREFLIGHT : pas de Content-Type JSON → pas d'OPTIONS CORS
-    async function postJSON(url, data, keepalive=false){
-      // Utilise sendBeacon quand on quitte la page
+    // Pas d'entêtes custom => pas de preflight CORS ; sendBeacon sur unload.
+    function postJSON(url, data, keepalive=false){
+      const body = JSON.stringify(data);
       if (keepalive && navigator.sendBeacon) {
         try {
-          const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+          const blob = new Blob([body], { type: "text/plain" });
           navigator.sendBeacon(url, blob);
           return;
         } catch(_) {}
       }
-      try{
-        await fetch(url, {
-          method: "POST",
-          // surtout pas de headers ici
-          body: JSON.stringify(data),
-          // mode: "no-cors", // inutile, on ne lit pas la réponse
-          keepalive: !!keepalive
-        });
-      }catch(_){}
+      // on ne lit pas la réponse, on "fire-and-forget"
+      fetch(url, { method: "POST", body }).catch(()=>{});
     }
 
-    async function sendSummary(isFinal=false, keepalive=false){
-      await postJSON(WEBHOOK_URL, buildPayload(isFinal), keepalive);
+    function sendSummary(isFinal=false, keepalive=false){
+      postJSON(WEBHOOK_URL, buildPayload(isFinal), keepalive);
     }
 
-    // Ping "play détecté" (lecture manuelle même si 0s vues)
-    async function sendPlayStarted(){
-      if (hasSentPlay) return;
-      hasSentPlay = true;
-      await postJSON(WEBHOOK_URL, buildPayload(false));
-    }
+    function attachPlayerEvents(){
+      if (!player) return;
 
-    function startTracking(){
-      ended=false; isReplay = (replayCount > 0);
-      watchedMap=Object.create(null); lastSecSent=-1;
+      // Durée dès que dispo
+      (async () => {
+        try {
+          const d = await player.duration;
+          if (Number.isFinite(d)) duration = Math.floor(d);
+        } catch(_) {}
+      })();
 
-      (async ()=>{ try{ duration = Math.floor(await player.duration); }catch(_){ duration = 0; } })();
+      player.addEventListener('play', async () => {
+        if (!hasStarted) {
+          hasStarted = true;       // première lecture
+          isReplay = false;
+          sendSummary(false);
+        } else if (ended) {
+          // lecture après une fin => replay
+          replayCount += 1;
+          isReplay = true;
+          ended = false;
+          watchedSeconds.clear();
+          sendSummary(false);
+        }
+      });
 
-      const intervalId = setInterval(async ()=>{
-        if (!player || ended) { clearInterval(intervalId); return; }
-        try{
-          const paused = await player.paused;
-          if (paused) return;
-          const t = Math.floor(await player.currentTime);
-          if (!watchedMap[t]) {
-            watchedMap[t] = true;
-            if (t !== lastSecSent) { lastSecSent = t; sendSummary(false); }
+      // cadence fournie par le SDK; on accumule les secondes uniques
+      player.addEventListener('timeupdate', async (e) => {
+        try {
+          const current = Math.floor(e?.detail?.seconds ?? await player.currentTime);
+          if (current >= 0 && !Number.isNaN(current)) {
+            if (!watchedSeconds.has(current)) {
+              watchedSeconds.add(current);
+              sendSummary(false);
+            }
           }
-        }catch(_){}
-      }, 1000);
+          if (!duration) {
+            const d = await player.duration;
+            if (Number.isFinite(d)) duration = Math.floor(d);
+          }
+        } catch(_) {}
+      });
 
-      player.addEventListener("ended", () => {
+      player.addEventListener('ended', () => {
         if (ended) return;
         ended = true;
         sendSummary(true);
-        openCalendly();
-      }, { once:true });
+        openCalendly(); // ouvre la modale à la fin
+      });
     }
 
-    // Démarre sur la première lecture réelle + gère les replays
-    const waitPlayerReady = setInterval(async ()=>{
+    // Installe les events quand le SDK est prêt
+    const readyTimer = setInterval(() => {
       if (!player) return;
-      clearInterval(waitPlayerReady);
-
-      player.addEventListener("play", async ()=>{
-        if (ended) {
-          // Nouvelle lecture après une fin → replay
-          replayCount += 1;
-          isReplay = true;
-          startTracking();
-        } else {
-          // Première lecture de la session
-          await sendPlayStarted();
-          startTracking();
-        }
-      });
+      clearInterval(readyTimer);
+      attachPlayerEvents();
     }, 50);
 
-    // Sauvegarde finale si l’utilisateur ferme/rafraîchit
-    window.addEventListener("beforeunload", function(){
-      try{
-        sendSummary(true, /*keepalive*/ true);
-      }catch(_){}
+    // flush final si l’utilisateur ferme/rafraîchit
+    window.addEventListener("beforeunload", () => {
+      try { sendSummary(true, /*keepalive*/ true); } catch(_){}
     });
   </script>
 </body>
