@@ -102,7 +102,7 @@
   <div class="wrap">
     <div class="stage">
       <div class="player">
-        <!-- Cloudflare Stream (src injecté au clic) -->
+        <!-- Cloudflare Stream -->
         <iframe id="stream-player"
           src=""
           allow="autoplay; encrypted-media; picture-in-picture"
@@ -117,12 +117,12 @@
         </div>
       </div>
 
-      <!-- CTA (sous la vidéo) -->
+      <!-- CTA -->
       <button id="ctaBtn" class="cta-btn" aria-label="Prendre rendez-vous">📞 Réservez un Rendez-Vous !</button>
     </div>
   </div>
 
-  <!-- Modal Calendly (impossible à fermer) -->
+  <!-- Modal Calendly -->
   <div id="calOverlay" class="overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calTitle">
       <div class="modal-head">
@@ -170,28 +170,34 @@
     const playerIframe = document.getElementById("stream-player");
     const playMask     = document.getElementById("playMask");
 
-    // CTA : « 📞 Prénom, Réservez un Rendez-Vous ! »
+    // Charger la vidéo silencieuse (prête avant clic)
+    playerIframe.src =
+      `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?autoplay=false&muted=true&playsinline=true&defaultTextTrack=fr`;
+
+    let player = null;
+    playerIframe.addEventListener('load', () => {
+      try { player = Stream(playerIframe); } catch(_) {}
+    }, { once:true });
+
+    // Calendly
     const ctaBtn = document.getElementById('ctaBtn');
     ctaBtn.textContent = firstName
       ? `📞 ${firstName}, Réservez un Rendez-Vous !`
       : `📞 Réservez un Rendez-Vous !`;
 
-    // Calendly (ouverture uniquement, pas de fermeture)
     const calOverlay = document.getElementById('calOverlay');
     function openCalendly(){
       calOverlay.classList.remove('hidden');
       calOverlay.setAttribute('aria-hidden','false');
     }
     ctaBtn.addEventListener('click', openCalendly);
-    window.addEventListener('keydown', e => { if (e.key === 'Escape') e.preventDefault(); });
-    calOverlay.addEventListener('click', (e) => { e.stopPropagation(); });
 
     /********************
-     * Tracking (démarre APRES clic Play)
+     * Lecture avec son + tracking
      ********************/
     const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz9alEU_7igvcCej_rumzU7mtVQFYiCbUmczzNXpXVzU-1Uz37hHUhAe90z_I4Vstus/exec";
     const prospectId  = `${firstName}${lastName}-${VIDEO_ID}`;
-    let player = null, ended=false, duration=0, watchedMap=null, lastSecSent=-1;
+    let ended=false, duration=0, watchedMap=null, lastSecSent=-1;
     const sessionId = (crypto.randomUUID && crypto.randomUUID()) || (Date.now()+"-"+Math.random());
 
     function computeSummary(){
@@ -201,92 +207,58 @@
     }
     async function sendSummary(final=false){
       const { secondsWatched, pct } = computeSummary();
-      const payload = {
-        prospectId,
-        videoId: VIDEO_ID,
-        secondsWatched,
-        duration,
-        percent: pct,
-        sessionId,
-        final
-      };
+      const payload = { prospectId, videoId: VIDEO_ID, secondsWatched, duration, percent: pct, sessionId, final };
       try { await fetch(WEBHOOK_URL, { method:"POST", body: JSON.stringify(payload) }); } catch(e){}
     }
 
-    /********************
-     * Démarrage au clic (avec son)
-     ********************/
-    let started = false;
-    async function startPlayback(){
-      if (started) return;
-      started = true;
-
-      // Injecte l'iframe SRC avec autoplay et son (le clic = interaction utilisateur)
-      playerIframe.src =
-        `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?autoplay=true&muted=false&playsinline=true&defaultTextTrack=fr`;
-
-      const onLoad = async () => {
-        playerIframe.removeEventListener('load', onLoad);
-
-        // Récupère l'instance SDK
-        try {
-          player = Stream(playerIframe);
-        } catch (_) {
-          setTimeout(onLoad, 50);
-          return;
-        }
-
-        // Cache l'overlay
-        playMask.classList.add('hidden');
-
-        // Lecture avec son (forcer volume & unmute)
-        try {
-          player.muted = false;
-          player.volume = 1.0;
-          await player.play();
-        } catch (e) {
-          console.warn("Lecture bloquée, recliquer si nécessaire.", e);
-        }
-
-        // Sécurité : si volume = 0 non voulu
-        player.addEventListener('volumechange', () => {
-          if (player.volume === 0 && !player.muted) player.volume = 1.0;
-        });
-
-        // Init tracking
-        ended = false;
-        watchedMap = Object.create(null);
-        lastSecSent = -1;
-
-        try { duration = Math.floor(await player.duration); } catch(_) { duration = 0; }
-
-        // Tick tracking (1s)
-        const intervalId = setInterval(async ()=>{
-          if (!player || ended) { clearInterval(intervalId); return; }
-          try{
-            const paused = await player.paused;
-            if (paused) return;
-            const t = Math.floor(await player.currentTime);
-            if (!watchedMap[t]) {
-              watchedMap[t] = true;
-              if (t !== lastSecSent) { lastSecSent = t; sendSummary(false); }
-            }
-          }catch(_){}
-        }, 1000);
-
-        // Fin de lecture
-        player.addEventListener("ended", () => {
-          if (ended) return;
-          ended = true;
-          sendSummary(true);
-          openCalendly();
-        });
-      };
-
-      playerIframe.addEventListener('load', onLoad);
+    function initTracking(){
+      ended=false; watchedMap=Object.create(null); lastSecSent=-1;
+      (async ()=>{ try{ duration = Math.floor(await player.duration); }catch(_){ duration = 0; } })();
+      const intervalId = setInterval(async ()=>{
+        if (!player || ended) { clearInterval(intervalId); return; }
+        try{
+          const paused = await player.paused;
+          if (paused) return;
+          const t = Math.floor(await player.currentTime);
+          if (!watchedMap[t]) {
+            watchedMap[t] = true;
+            if (t !== lastSecSent) { lastSecSent = t; sendSummary(false); }
+          }
+        }catch(_){}
+      }, 1000);
+      player.addEventListener("ended", () => {
+        if (ended) return;
+        ended = true;
+        sendSummary(true);
+        openCalendly();
+      }, { once:true });
     }
 
-    // Clic utilisateur sur le masque = démarrer
+    // Clic = lecture avec son
+    let started = false;
+    function startPlayback(){
+      if (started || !player) return;
+      started = true;
+
+      try {
+        player.muted = false;
+        player.volume = 1.0;
+        player.play();
+
+        // Re-essai immédiat (pour Safari)
+        setTimeout(() => {
+          if (player.muted || player.volume === 0) {
+            player.muted = false;
+            player.volume = 1.0;
+            player.play();
+          }
+        }, 0);
+      } catch (e) {}
+
+      playMask.classList.add('hidden');
+      initTracking();
+    }
+
     playMask.addEventListener('click', startPlayback, { once:true });
   </script>
 </body>
