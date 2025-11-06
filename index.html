@@ -5,235 +5,342 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Regardez la Vidéo — Aqisio</title>
 
-  <!-- Preconnect Cloudflare Stream -->
-  <link rel="preconnect" href="https://iframe.videodelivery.net" crossorigin>
-  <link rel="preconnect" href="https://embed.cloudflarestream.com" crossorigin>
-
-  <!-- Calendly CSS (pas de JS ici, on le charge dynamiquement dans le body) -->
+  <!-- Optim Calendly -->
   <link rel="preconnect" href="https://assets.calendly.com" crossorigin>
   <link rel="preconnect" href="https://calendly.com" crossorigin>
-  <link rel="stylesheet" href="https://assets.calendly.com/assets/external/widget.css" />
+  <link rel="preload" as="script" href="https://assets.calendly.com/assets/external/widget.js">
 
   <style>
     :root { color-scheme: dark; }
-    body{ margin:0; background:#0b0b0b; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    .wrap{ display:grid; place-items:center; min-height:100dvh; padding:24px; gap:14px; }
-    .stage{ width:min(960px,100%); display:flex; flex-direction:column; align-items:flex-end; gap:14px; }
-    .player{ width:100%; aspect-ratio:16/9; position:relative; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.45); background:#000; }
-    .player iframe{ width:100%; height:100%; border:0; border-radius:16px; display:block; }
-
-    .cta-btn{ background:#0156CC; color:#fff; border:0; border-radius:16px; padding:20px 36px; font-weight:700; font-size:22px; line-height:1; cursor:pointer; box-shadow:0 8px 24px rgba(1,86,204,.45); transition:transform .12s, opacity .12s, box-shadow .12s; }
-    .cta-btn:hover{ transform:translateY(-2px); box-shadow:0 10px 30px rgba(1,86,204,.55); }
-    .cta-btn:active{ transform:translateY(0); opacity:.95; }
-    @media (max-width:768px){ .cta-btn{ padding:14px 22px; font-size:16px; border-radius:12px; } }
-
-    /* Overlay Calendly */
-    .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:grid; place-items:center; z-index:9999; transition:opacity .18s, visibility .18s; }
-    .overlay.hidden{ opacity:0; visibility:hidden; pointer-events:none; }
-    .modal{ width:min(980px,96vw); height:min(760px,88vh); background:#101012; border:1px solid rgba(255,255,255,.08); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden; transform:translateY(6px); transition:transform .18s, opacity .18s; opacity:1; }
-    .overlay.hidden .modal{ transform:translateY(12px); opacity:0; }
-    .modal-head{ display:flex; align-items:center; justify-content:center; padding:10px 14px; background:#0c0c0f; border-bottom:1px solid rgba(255,255,255,.06); }
-    .modal-title{ margin:0; font-size:.95rem; opacity:.9; }
-    .calendly-host{ width:100%; height:calc(100% - 46px); }
-    .calendly-inline-widget{ width:100%; height:100%; min-height:640px; }
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: #fff;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    .wrap {
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      padding: 24px;
+      gap: 14px;
+    }
+    .stage {
+      width: min(960px, 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 14px;
+    }
+    .player {
+      width: 100%;
+      aspect-ratio: 16/9;
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+      background: #000;
+    }
+    .player iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 16px;
+      display: block;
+    }
+    .cta-btn {
+      background: #0156CC;
+      color: #fff;
+      border: 0;
+      border-radius: 16px;
+      padding: 20px 36px;
+      font-weight: 700;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(1,86,204,.45);
+      transition: transform .12s, opacity .12s, box-shadow .12s;
+    }
+    .cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(1,86,204,.55);
+    }
+    .cta-btn:active {
+      transform: translateY(0);
+      opacity: .95;
+    }
+    @media (max-width:768px) {
+      .cta-btn {
+        padding: 14px 22px;
+        font-size: 16px;
+        border-radius: 12px;
+      }
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      display: grid;
+      place-items: center;
+      z-index: 9999;
+      transition: opacity .18s, visibility .18s;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .modal {
+      width: min(980px,96vw);
+      height: min(760px,88vh);
+      background: #101012;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+      overflow: hidden;
+      transform: translateY(6px);
+      transition: transform .18s, opacity .18s;
+      opacity: 1;
+    }
+    .overlay.hidden .modal {
+      transform: translateY(12px);
+      opacity: 0;
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      background: #0c0c0f;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .modal-title {
+      margin: 0;
+      font-size: .95rem;
+      opacity: .9;
+    }
+    .calendly-host {
+      width: 100%;
+      height: calc(100% - 46px);
+    }
+    .calendly-inline-widget {
+      width: 100%;
+      height: 100%;
+    }
   </style>
 
-  <!-- Cloudflare Stream SDK -->
-  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js" defer></script>
+  <script src="https://assets.calendly.com/assets/external/widget.js" async></script>
 </head>
 <body>
   <div class="wrap">
     <div class="stage">
       <div class="player">
-        <iframe id="stream-player" src="" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen="true"></iframe>
+        <iframe
+          id="stream-player"
+          src=""
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen="true">
+        </iframe>
       </div>
       <button id="ctaBtn" class="cta-btn" aria-label="Prendre rendez-vous">📞 Réservez un Rendez-Vous !</button>
     </div>
   </div>
 
-  <!-- Overlay Calendly -->
   <div id="calOverlay" class="overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calTitle">
       <div class="modal-head">
         <h2 id="calTitle" class="modal-title">Réservez votre créneau avec Aqisio</h2>
       </div>
       <div class="calendly-host">
-        <div id="calendly" class="calendly-inline-widget"></div>
+        <div id="calendly" class="calendly-inline-widget"
+             data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1">
+        </div>
       </div>
     </div>
   </div>
 
+  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+
   <script>
-    /* ========== Paramètres vidéo & prospect ========== */
+    /* ====== Querystring & identité vidéo/prospect ====== */
     const qs = new URLSearchParams(location.search);
-    const niceCase = s => s ? decodeURIComponent(s).trim().replace(/_/g," ").replace(/\s+/g," ")
-      .split(/([\s-]+)/).map(ch => /[\s-]+/.test(ch)? ch : (ch[0]?.toUpperCase()+ch.slice(1).toLowerCase())).join("") : "";
-    const firstName = niceCase(qs.get("f")||"");
-    const lastName  = niceCase(qs.get("l")||"");
-    const idRaw     = qs.get("id")||"";
-    const sendDate  = qs.get("d") || "";
-    document.title = (firstName||lastName) ? `${firstName} ${lastName} - Regardez la Vidéo` : `Regardez la Vidéo — Aqisio`;
+    const niceCase = s => {
+      if (!s) return "";
+      try { s = decodeURIComponent(s); } catch (_) {}
+      s = s.trim().replace(/_/g," ").replace(/\s+/g," ");
+      return s.split(/([\s-]+)/).map(ch =>
+        /[\s-]+/.test(ch) ? ch : (ch[0]?.toUpperCase() + ch.slice(1).toLowerCase())
+      ).join("");
+    };
+
+    const firstName = niceCase(qs.get("f") || "");
+    const lastName = niceCase(qs.get("l") || "");
+    const idRaw = qs.get("id") || "";
+
+    document.title = (firstName || lastName)
+      ? `${firstName} ${lastName} - Regardez la Vidéo`
+      : "Regardez la Vidéo — Aqisio";
 
     const DEFAULT_ID = "5032da31754eb596edf1e9d68cbe031e";
     const VIDEO_ID = /^[a-f0-9]{32}$/i.test(idRaw) ? idRaw : DEFAULT_ID;
     const prospectId = `${firstName}${lastName}-${VIDEO_ID}`;
 
-    /* ========== Cloudflare Player ========== */
+    /* ====== Player ====== */
     const playerIframe = document.getElementById("stream-player");
     playerIframe.src = `https://iframe.videodelivery.net/${encodeURIComponent(VIDEO_ID)}?controls=true&playsinline=true&defaultTextTrack=fr`;
+
     let player = null;
-    playerIframe.addEventListener('load', () => { try{ player = Stream(playerIframe); }catch(_){ } }, { once:true });
+    playerIframe.addEventListener('load', () => {
+      try { player = Stream(playerIframe); } catch (_) {}
+    }, { once: true });
 
-    /* ========== Calendly (init retardée fiable) ========== */
+    /* ====== CTA / Calendly ====== */
+    const ctaBtn = document.getElementById('ctaBtn');
+    ctaBtn.textContent = firstName
+      ? `📞 ${firstName}, Réservez un Rendez-Vous !`
+      : "📞 Réservez un Rendez-Vous !";
+
     const calOverlay = document.getElementById('calOverlay');
-    const calHost = document.getElementById('calendly');
-    const CAL_URL = "https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1";
-
-    function loadCalendlyJS(){
-      return new Promise(resolve=>{
-        if(window.Calendly) return resolve();
-        const s=document.createElement('script');
-        s.src="https://assets.calendly.com/assets/external/widget.js";
-        s.onload=resolve;
-        document.head.appendChild(s);
-      });
-    }
-
-    async function openCalendly(){
-      // 1) Affiche l’overlay
+    const openCalendly = () => {
       calOverlay.classList.remove('hidden');
-      calOverlay.setAttribute('aria-hidden','false');
-      // 2) Charge le JS si besoin
-      await loadCalendlyJS();
-      // 3) Nettoie le conteneur (en cas de réouverture)
-      calHost.innerHTML="";
-      // 4) Attend deux frames pour que le conteneur soit mesuré
-      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-      // 5) Initialise Calendly
-      window.Calendly.initInlineWidget({
-        url: CAL_URL,
-        parentElement: calHost
-      });
-    }
-
-    const ctaBtn=document.getElementById('ctaBtn');
-    ctaBtn.textContent = firstName ? `📞 ${firstName}, Réservez un Rendez-Vous !` : `📞 Réservez un Rendez-Vous !`;
+      calOverlay.setAttribute('aria-hidden', 'false');
+    };
     ctaBtn.addEventListener('click', openCalendly);
 
-    /* ========== Tracking ========== */
-    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzPt-Ig6VoKckcRxNSFXP6ediI0aJsHFmYHJ-z3-FaUhBwSIGvp3AgHvgVxqb8axb20hg/exec";
-    const sessionId = crypto.randomUUID ? crypto.randomUUID() : Date.now()+"-"+Math.random();
-    const watchedSeconds = new Set();
-    let hasStarted=false, ended=false, duration=0;
-    let play_count=0, pause_count=0, seek_count=0, buffer_count=0;
-    let muted=false, volume=1, playback_rate=1;
-    let first_play_at=null, ended_at=null, cta_clicks=0, cta_first_click_at=null;
-    let last_second=0, max_continuous_streak=0, current_streak=0;
-    let q25=false,q50=false,q75=false,q95_100=false;
-    let hidden_since=null, hidden_time_total=0;
-    const start_time=Date.now();
-    const viewport=`${innerWidth}x${innerHeight}`;
-
-    document.addEventListener('visibilitychange',()=>{
-      if(document.hidden) hidden_since=Date.now();
-      else if(hidden_since){ hidden_time_total+=Math.floor((Date.now()-hidden_since)/1000); hidden_since=null; }
-    });
-
-    const computeSummary=()=>{
-      const secondsWatched=watchedSeconds.size;
-      const pDec=duration>0?Math.min(1,secondsWatched/duration):0;
-      return {secondsWatched,pDec};
-    };
-
-    function getClientMeta(){
-      const ua=navigator.userAgent||"";
-      let browser="Unknown",os="Unknown",device=/Mobi/i.test(ua)?"Mobile":"Desktop";
-      if(/Chrome/.test(ua))browser="Chrome";else if(/Safari/.test(ua))browser="Safari";
-      if(/Mac OS/.test(ua))os="macOS";else if(/Win/.test(ua))os="Windows";else if(/Android/.test(ua))os="Android";else if(/iPhone|iPad/.test(ua))os="iOS";
-      return {browser,os,device,lang:navigator.language||"",tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"",screen:`${screen.width}x${screen.height}`};
+    /* ====== Contexte visite / UTM ====== */
+    const landing_url = location.href;
+    const referrer = document.referrer || "";
+    const utm = {};
+    for (const [k, v] of qs.entries()) {
+      if (/^utm_(source|medium|campaign|content|term)$/i.test(k) || /^(gclid|fbclid)$/i.test(k))
+        utm[k.toLowerCase()] = v;
     }
+    const page_session_id = crypto.randomUUID();
 
-    function buildPayload(event_type){
-      const meta=getClientMeta();
-      const {secondsWatched,pDec}=computeSummary();
-      return{
-        f:firstName,l:lastName,d:sendDate,
-        prospectId,videoId:VIDEO_ID,sessionId,
-        secondsWatched,duration,percent:Number(pDec.toFixed(4)),
-        event_type:event_type||(ended?"final":(hasStarted?"ping":"visit")),
-        final:ended,
-        q25,q50,q75,q95_100,
-        play_count,pause_count,seek_count,buffer_count,
-        playback_rate,muted,volume,
-        first_play_at,ended_at,
-        viewport,
-        hidden_time_total,
-        time_on_page:Math.floor((Date.now()-start_time)/1000),
-        ...meta
+    /* ====== Meta device / browser ====== */
+    function getClientMeta() {
+      const ua = navigator.userAgent || "";
+      let browser_name = "Unknown", browser_version = "", os_name = "Unknown", os_version = "";
+      let device_type = /Mobi/i.test(ua) ? "mobile" : "desktop";
+
+      if (/Edg\/([\d.]+)/.test(ua)) { browser_name = "Edge"; browser_version = RegExp.$1; }
+      else if (/OPR\/([\d.]+)/.test(ua)) { browser_name = "Opera"; browser_version = RegExp.$1; }
+      else if (/Chrome\/([\d.]+)/.test(ua)) { browser_name = "Chrome"; browser_version = RegExp.$1; }
+      else if (/Firefox\/([\d.]+)/.test(ua)) { browser_name = "Firefox"; browser_version = RegExp.$1; }
+      else if (/Version\/([\d.]+).*Safari/.test(ua)) { browser_name = "Safari"; browser_version = RegExp.$1; }
+
+      if (/Windows NT ([\d.]+)/.test(ua)) { os_name = "Windows"; os_version = RegExp.$1; }
+      else if (/Mac OS X ([\d_]+)/.test(ua)) { os_name = "macOS"; os_version = RegExp.$1.replace(/_/g,'.'); }
+      else if (/\biPhone OS ([\d_]+)/.test(ua)) { os_name = "iOS"; os_version = RegExp.$1.replace(/_/g,'.'); device_type = "mobile"; }
+      else if (/Android ([\d.]+)/.test(ua)) { os_name = "Android"; os_version = RegExp.$1; device_type = "mobile"; }
+
+      return {
+        userAgent: ua,
+        language: navigator.language || "",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+        screen_resolution: `${screen.width}x${screen.height}`,
+        device_type, browser_name, browser_version, os_name, os_version
       };
     }
 
-    function postJSON(url,data,keepalive=false){
-      const body=JSON.stringify(data);
-      if(keepalive&&navigator.sendBeacon){
-        try{navigator.sendBeacon(url,new Blob([body],{type:"application/json"}));return;}catch(_){}
-      }
-      fetch(url,{method:"POST",headers:{'Content-Type':'application/json'},body}).catch(()=>{});
+    /* ====== Engagement avancé ====== */
+    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzPt-Ig6VoKckcRxNSFXP6ediI0aJsHFmYHJ-z3-FaUhBwSIGvp3AgHvgVxqb8axb20hg/exec";
+    const sessionId = crypto.randomUUID();
+    const watchedSeconds = new Set();
+    let hasStarted = false, ended = false, duration = 0;
+    let play_count = 0, pause_count = 0, seek_count = 0, buffer_count = 0;
+    let muted = false, volume = 1, playback_rate = 1;
+    let first_play_at = null, ended_at = null;
+    let cta_clicks = 0, cta_first_click_at = null;
+    const cta_destination = "https://calendly.com/aqisio/presentation";
+
+    const start_time = Date.now();
+
+    function computeSummary() {
+      const secondsWatched = watchedSeconds.size;
+      const pct = duration > 0 ? Math.min(100, Math.round((secondsWatched / duration) * 100)) : 0;
+      return { secondsWatched, pct };
     }
-    const sendSummary=(e,keep=false)=>postJSON(WEBHOOK_URL,buildPayload(e),keep);
 
-    setTimeout(()=>sendSummary("visit"),1000);
-    let visitTicker=setInterval(()=>{if(!hasStarted&&!ended)sendSummary("visit_ping");else{clearInterval(visitTicker);visitTicker=null;}},10000);
+    function buildPayload(event_type) {
+      const meta = getClientMeta();
+      const { secondsWatched, pct } = computeSummary();
+      return {
+        prospectId, videoId: VIDEO_ID, sessionId,
+        secondsWatched, duration, percent: pct,
+        event_type: event_type || (ended ? "final" : (hasStarted ? "ping" : "visit")),
+        final: ended, is_replay: false,
+        play_count, pause_count, seek_count, buffer_count,
+        playback_rate, muted, volume,
+        first_play_at, ended_at,
+        cta_clicks, cta_first_click_at, cta_destination,
+        landing_url, referrer, page_session_id, ...utm,
+        userAgent: meta.userAgent,
+        language: meta.language,
+        timezone: meta.timezone,
+        screen_resolution: meta.screen_resolution,
+        device_type: meta.device_type,
+        browser_name: meta.browser_name,
+        browser_version: meta.browser_version,
+        os_name: meta.os_name,
+        os_version: meta.os_version
+      };
+    }
 
-    const readyTimer=setInterval(async()=>{
-      if(!player)return;
+    function postJSON(url, data, keepalive = false) {
+      const body = JSON.stringify(data);
+      if (keepalive && navigator.sendBeacon) {
+        try {
+          navigator.sendBeacon(url, new Blob([body], { type: "text/plain" }));
+          return;
+        } catch (_) {}
+      }
+      fetch(url, { method: "POST", body }).catch(() => {});
+    }
+
+    function sendSummary(event_type, keepalive = false) {
+      postJSON(WEBHOOK_URL, buildPayload(event_type), keepalive);
+    }
+
+    // Premier ping "visit"
+    sendSummary("visit");
+
+    /* ====== Player Events ====== */
+    const readyTimer = setInterval(async () => {
+      if (!player) return;
       clearInterval(readyTimer);
-      try{const d=await player.duration;if(Number.isFinite(d))duration=Math.floor(d);}catch(_){}
 
-      player.addEventListener('play',async()=>{
+      try {
+        const d = await player.duration;
+        if (Number.isFinite(d)) duration = Math.floor(d);
+      } catch (_) {}
+
+      player.addEventListener('play', async () => {
         play_count++;
-        if(!hasStarted){hasStarted=true;first_play_at=new Date().toISOString();}
-        try{playback_rate=await player.playbackRate;muted=await player.muted;volume=await player.volume;}catch(_){}
+        if (!hasStarted) {
+          hasStarted = true;
+          first_play_at = new Date().toISOString();
+        }
         sendSummary("play");
       });
 
-      player.addEventListener('pause',()=>{pause_count++;sendSummary("pause");});
-      player.addEventListener('seeked',()=>{seek_count++;current_streak=0;sendSummary("seek");});
-      player.addEventListener('waiting',()=>{buffer_count++;});
-
-      player.addEventListener('timeupdate',async(e)=>{
-        try{
-          const current=Math.floor(e?.detail?.seconds??await player.currentTime);
-          if(!Number.isNaN(current)&&current>=0&&!watchedSeconds.has(current)){
-            watchedSeconds.add(current);
-            if(current===last_second+1)current_streak++;
-            else if(current>last_second+1)current_streak=1;
-            max_continuous_streak=Math.max(max_continuous_streak,current_streak);
-            last_second=Math.max(last_second,current);
-            const p=Math.round((watchedSeconds.size/(duration||1))*100);
-            if(!q25&&p>=25)q25=true;if(!q50&&p>=50)q50=true;if(!q75&&p>=75)q75=true;if(!q95_100&&p>=95)q95_100=true;
-            sendSummary("ping");
-          }
-        }catch(_){}
+      player.addEventListener('pause', () => {
+        pause_count++;
+        sendSummary("pause");
       });
 
-      player.addEventListener('ended',()=>{
-        if(ended)return;
-        ended=true;ended_at=new Date().toISOString();
+      player.addEventListener('ended', () => {
+        if (ended) return;
+        ended = true;
+        ended_at = new Date().toISOString();
         sendSummary("final");
         openCalendly();
       });
-    },50);
+    }, 50);
 
-    ctaBtn.addEventListener('click',()=>{
-      cta_clicks++; if(!cta_first_click_at) cta_first_click_at=new Date().toISOString();
-      sendSummary("cta_click");
+    window.addEventListener("beforeunload", () => {
+      postJSON(WEBHOOK_URL, buildPayload(ended ? "final" : "no_play_final"), true);
     });
-
-    const flush=()=>{if(!hasStarted)postJSON(WEBHOOK_URL,buildPayload("no_play_final"),true);
-      else postJSON(WEBHOOK_URL,buildPayload("final"),true);};
-    window.addEventListener("beforeunload",flush);
-    window.addEventListener("pagehide",flush);
   </script>
 </body>
 </html>
