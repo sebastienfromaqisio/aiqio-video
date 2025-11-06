@@ -5,9 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Regardez la Vidéo — Aqisio</title>
 
-  <!-- Preconnect Cloudflare Stream (lecteur) -->
+  <!-- Preconnect lecteur -->
   <link rel="preconnect" href="https://iframe.videodelivery.net" crossorigin>
   <link rel="preconnect" href="https://embed.cloudflarestream.com" crossorigin>
+
+  <!-- Calendly: préconnect + CSS + JS en statique (fiable) -->
+  <link rel="preconnect" href="https://assets.calendly.com" crossorigin>
+  <link rel="preconnect" href="https://calendly.com" crossorigin>
+  <link rel="stylesheet" href="https://assets.calendly.com/assets/external/widget.css" />
+  <script src="https://assets.calendly.com/assets/external/widget.js" defer></script>
 
   <style>
     :root { color-scheme: dark; }
@@ -16,6 +22,7 @@
     .stage{ width:min(960px,100%); display:flex; flex-direction:column; align-items:flex-end; gap:14px; }
     .player{ width:100%; aspect-ratio:16/9; position:relative; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.45); background:#000; }
     .player iframe{ width:100%; height:100%; border:0; border-radius:16px; display:block; }
+
     .cta-btn{ background:#0156CC; color:#fff; border:0; border-radius:16px; padding:20px 36px; font-weight:700; font-size:22px; line-height:1; cursor:pointer; box-shadow:0 8px 24px rgba(1,86,204,.45); transition:transform .12s, opacity .12s, box-shadow .12s; }
     .cta-btn:hover{ transform:translateY(-2px); box-shadow:0 10px 30px rgba(1,86,204,.55); }
     .cta-btn:active{ transform:translateY(0); opacity:.95; }
@@ -29,7 +36,7 @@
     .modal-head{ display:flex; align-items:center; justify-content:center; padding:10px 14px; background:#0c0c0f; border-bottom:1px solid rgba(255,255,255,.06); }
     .modal-title{ margin:0; font-size:.95rem; opacity:.9; }
     .calendly-host{ width:100%; height:calc(100% - 46px); }
-    .calendly-inline-widget{ width:100%; height:100%; }
+    .calendly-inline-widget{ width:100%; height:100%; min-height:640px; } /* hauteur explicite */
   </style>
 
   <!-- Cloudflare Stream SDK -->
@@ -78,37 +85,18 @@
     let player = null;
     playerIframe.addEventListener('load', () => { try{ player = Stream(playerIframe); }catch(_){ } }, { once:true });
 
-    /* ====== Calendly (fix complet) ====== */
+    /* ====== Calendly (init après affichage) ====== */
     const calOverlay = document.getElementById('calOverlay');
     const calHost = document.getElementById('calendly');
-    let calendlyLoaded = false;
+    const CAL_URL = "https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1";
 
-    function loadCalendlyAssets() {
-      return new Promise(resolve=>{
-        if (!document.querySelector('link[data-calendly-css]')) {
-          const css=document.createElement('link');
-          css.rel='stylesheet'; css.href='https://assets.calendly.com/assets/external/widget.css';
-          css.dataset.calendlyCss='1'; document.head.appendChild(css);
-        }
-        if (window.Calendly) return resolve();
-        const s=document.createElement('script');
-        s.src="https://assets.calendly.com/assets/external/widget.js";
-        s.async=true; s.onload=resolve;
-        document.head.appendChild(s);
-      });
-    }
-
-    async function loadCalendly(){ if(calendlyLoaded) return; await loadCalendlyAssets(); calendlyLoaded=true; }
-
-    async function openCalendly(){
+    function openCalendly(){
       calOverlay.classList.remove('hidden');
       calOverlay.setAttribute('aria-hidden','false');
-      await loadCalendly();
-      calHost.innerHTML = "";
-      window.Calendly?.initInlineWidget?.({
-        url:"https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1",
-        parentElement:calHost
-      });
+      // si pas déjà initialisé, on crée l'iframe maintenant
+      if (!calHost.querySelector('iframe') && window.Calendly?.initInlineWidget) {
+        window.Calendly.initInlineWidget({ url: CAL_URL, parentElement: calHost });
+      }
     }
 
     const ctaBtn=document.getElementById('ctaBtn');
@@ -201,10 +189,10 @@
     }
     const sendSummary=(e,keep=false)=>postJSON(WEBHOOK_URL,buildPayload(e),keep);
 
-    // (1) visite retardée 1s
+    // 1) visite retardée 1s
     setTimeout(()=>sendSummary("visit"),1000);
 
-    // (2) Heartbeat visite passive
+    // 2) heartbeat visite passive
     let visitTicker=setInterval(()=>{
       if(!hasStarted&&!ended)sendSummary("visit_ping");
       else{clearInterval(visitTicker);visitTicker=null;}
@@ -217,10 +205,9 @@
       try{const d=await player.duration;if(Number.isFinite(d))duration=Math.floor(d);}catch(_){}
 
       player.addEventListener('play',async()=>{
-        if(!hasStarted)loadCalendly();
         play_count++;
         if(!hasStarted){hasStarted=true;first_play_at=new Date().toISOString();}
-        try{playback_rate=await player.playbackRate;muted=await player.muted;volume=await player.volume;}catch(_){}
+        try{playback_rate=await player.playbackRate;muted=await player.muted;volume=await player.volume;}catch(_){ }
         sendSummary("play");
       });
 
@@ -256,12 +243,11 @@
 
     // CTA click tracking
     ctaBtn.addEventListener('click',()=>{
-      cta_clicks++;
-      if(!cta_first_click_at)cta_first_click_at=new Date().toISOString();
+      cta_clicks++; if(!cta_first_click_at) cta_first_click_at=new Date().toISOString();
       sendSummary("cta_click");
     });
 
-    // (3) Flush à la sortie
+    // Flush sortie
     const flush=()=>{if(!hasStarted)postJSON(WEBHOOK_URL,buildPayload("no_play_final"),true);
       else postJSON(WEBHOOK_URL,buildPayload("final"),true);};
     window.addEventListener("beforeunload",flush);
