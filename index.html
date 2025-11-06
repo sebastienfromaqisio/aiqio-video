@@ -1,39 +1,40 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <!-- ===== Performance & base ===== -->
+  <!-- ===== Base minimaliste & perf ===== -->
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>LP — Vidéo Personnalisée</title>
-  <!-- Pré-connexion à l'iframe Cloudflare Stream (accélère la 1re requête) -->
+  <!-- Pré-connexion utiles -->
   <link rel="preconnect" href="https://iframe.videodelivery.net" crossorigin>
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
   <style>
-    /* ===== Styles minimaux pour lisibilité ===== */
+    /* ===== Styles ultra-simples pour lisibilité ===== */
     :root { --fg:#111; --muted:#666; --bg:#fff; --err:#b00020; }
-    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; }
-    .wrap { max-width: 760px; margin: 24px auto; padding: 0 16px; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    .meta, .debug { font-size: 14px; color: var(--muted); }
-    .video { margin: 16px 0; aspect-ratio: 16/9; background:#000; }
-    iframe { width: 100%; height: 100%; border: 0; display: block; }
-    .error { color: var(--err); font-weight: 600; margin-top: 12px; }
-    .kv { margin: 4px 0; }
-    .kv code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
-    .hidden { display:none; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:760px;margin:24px auto;padding:0 16px}
+    h1{font-size:20px;margin:0 0 8px}
+    .meta,.debug{font-size:14px;color:var(--muted)}
+    .video{margin:16px 0;aspect-ratio:16/9;background:#000}
+    iframe{width:100%;height:100%;border:0;display:block}
+    .error{color:var(--err);font-weight:600;margin-top:12px}
+    .kv{margin:4px 0}
+    .kv code{background:#f4f4f4;padding:2px 4px;border-radius:4px}
+    .hidden{display:none}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <!-- ===== Titre : “qu’est-ce qui est quoi” ===== -->
+    <!-- ===== Qu'est-ce qui est quoi ===== -->
     <h1>LP — Vidéo personnalisée du prospect</h1>
-    <p class="meta">Cette page attend <code>f</code> (firstname), <code>l</code> (lastname), <code>id</code> (Cloudflare Stream video UID), <code>d</code> (date).</p>
+    <p class="meta">Cette page lit <code>f</code> (prénom), <code>l</code> (nom), <code>id</code> (UID vidéo Cloudflare Stream), <code>d</code> (date) depuis l’URL.</p>
 
-    <!-- ===== Zone d’infos lisibles humain ===== -->
+    <!-- ===== Infos visibles pour debug ===== -->
     <div id="info" class="debug">
       <div class="kv">Prénom (<code>f</code>) : <strong id="fVal">—</strong></div>
       <div class="kv">Nom (<code>l</code>) : <strong id="lVal">—</strong></div>
       <div class="kv">Date (<code>d</code>) : <strong id="dVal">—</strong></div>
-      <div class="kv">ID vidéo Cloudflare (<code>id</code>) : <strong id="idVal">—</strong></div>
+      <div class="kv">ID vidéo (<code>id</code>) : <strong id="idVal">—</strong></div>
     </div>
 
     <!-- ===== Emplacement vidéo ===== -->
@@ -42,16 +43,12 @@
     <!-- ===== Erreurs lisibles ===== -->
     <div id="errorBox" class="error hidden"></div>
 
-    <noscript>
-      <p class="error">JavaScript est requis pour charger la vidéo dynamique.</p>
-    </noscript>
+    <noscript><p class="error">JavaScript est requis pour charger la vidéo et enregistrer la visite.</p></noscript>
   </div>
 
   <script>
-    // ===== 0) Utilitaires mini =====
+    // ====== 0) Lecture des paramètres d'URL (f, l, id, d) ======
     const qs = new URLSearchParams(location.search);
-
-    // Récupération brute
     const raw = {
       f: qs.get('f') || '',
       l: qs.get('l') || '',
@@ -59,48 +56,87 @@
       d: qs.get('d') || ''
     };
 
-    // Validation ultra-simple de l'ID Cloudflare Stream (ex: 32 hex comme "0bf4...fede")
-    // NB: adapte si tes IDs ont un autre format.
-    const idIsHex32 = /^[a-f0-9]{32}$/i.test(raw.id);
-
-    // ===== 1) Affichage des valeurs (qu’est-ce qui est quoi) =====
+    // Affichage "qu'est-ce qui est quoi"
     const setText = (id, v) => document.getElementById(id).textContent = v || '—';
     setText('fVal', raw.f);
     setText('lVal', raw.l);
     setText('dVal', raw.d);
     setText('idVal', raw.id);
 
-    // ===== 2) Gestion d’erreurs =====
+    // ====== 1) Affichage vidéo Cloudflare Stream (si id présent) ======
     const errorBox = document.getElementById('errorBox');
-    const showError = (msg) => {
-      errorBox.textContent = msg;
-      errorBox.classList.remove('hidden');
-    };
+    const showError = (msg) => { errorBox.textContent = msg; errorBox.classList.remove('hidden'); };
 
     if (!raw.id) {
-      showError('Paramètre manquant : id (l’UID de la vidéo Cloudflare Stream).');
-    } else if (!idIsHex32) {
-      showError('Paramètre id invalide : attendu 32 caractères hexadécimaux. Reçu: "' + raw.id + '"');
+      showError('Paramètre manquant : id (UID vidéo Cloudflare Stream).');
     } else {
-      // ===== 3) Construction de l'iframe Stream =====
-      // Doc Cloudflare Stream : iframe publique => https://iframe.videodelivery.net/{VIDEO_UID}
-      // Options utiles : autoplay, muted, controls. (autoplay souvent nécessite muted)
       const src = 'https://iframe.videodelivery.net/' + encodeURIComponent(raw.id) + '?autoplay=true&muted=true&controls=true';
-
       const iframe = document.createElement('iframe');
-      iframe.setAttribute('allow', 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; clipboard-write');
-      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('allow','accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; clipboard-write');
+      iframe.setAttribute('allowfullscreen','');
       iframe.src = src;
-
       const box = document.getElementById('videoBox');
       box.appendChild(iframe);
       box.classList.remove('hidden');
     }
 
-    // ===== 4) (Optionnel) Mise à jour du <title> pour le confort / debug =====
-    if (raw.f || raw.l) {
-      document.title = 'Vidéo pour ' + [raw.f, raw.l].filter(Boolean).join(' ');
-    }
+    // (Confort) Titre personnalisé si on a f/l
+    if (raw.f || raw.l) document.title = 'Vidéo pour ' + [raw.f, raw.l].filter(Boolean).join(' ');
+
+    // ====== 2) Tracking "VISITE" → Google Apps Script → Google Sheets ======
+    (function(){
+      // Ce qui est envoyé :
+      const visit = {
+        ts_client: new Date().toISOString(),   // timestamp navigateur (informatif)
+        url: location.href,                    // URL complète visitée
+        referrer: document.referrer || '',     // provenance
+        ua: navigator.userAgent || '',         // user-agent
+        viewport_w: window.innerWidth || 0,    // largeur viewport
+        viewport_h: window.innerHeight || 0,   // hauteur viewport
+        lang: navigator.language || '',        // langue navigateur
+        // Valeurs "prospect + vidéo" en clair comme demandé
+        f: raw.f,
+        l: raw.l,
+        id: raw.id,
+        d: raw.d
+      };
+
+      // URL de déploiement Apps Script (fournie)
+      const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzESR1YDhQKMSUcJA8akPoztJSQnJTuHePArj-VXdLO2MM4b3qjcNJSqjSbKBoVBD44vg/exec';
+
+      // Prépare le payload
+      const payload = new Blob([JSON.stringify(visit)], { type: 'application/json' });
+
+      // Envoi principal : sendBeacon (léger, non-bloquant)
+      let sent = false;
+      if (navigator.sendBeacon) {
+        sent = navigator.sendBeacon(WEB_APP_URL, payload);
+      }
+
+      // Fallback si sendBeacon indisponible
+      if (!sent) {
+        try {
+          fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify(visit),
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            mode: 'no-cors'
+          });
+        } catch(_) { /* on garde la page ultra-légère */ }
+      }
+
+      // Ping de sortie minimal (optionnel) pour capter les visites très courtes
+      addEventListener('visibilitychange', function(){
+        if (document.visibilityState === 'hidden' && navigator.sendBeacon) {
+          const tiny = new Blob([JSON.stringify({
+            url: visit.url, f: visit.f, l: visit.l, id: visit.id, d: visit.d,
+            ts_client: new Date().toISOString(), final: true
+          })], { type: 'application/json' });
+          navigator.sendBeacon(WEB_APP_URL, tiny);
+        }
+      });
+    })();
   </script>
 </body>
 </html>
