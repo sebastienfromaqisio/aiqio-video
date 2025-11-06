@@ -113,7 +113,11 @@
     </div>
   </div>
 
+  <!-- SDK officiel Cloudflare Stream -->
+  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+
   <script>
+    // ───────── Paramètres d'URL ─────────
     const qs = new URLSearchParams(location.search);
     const f  = (qs.get('f')  || '').trim();
     const l  = (qs.get('l')  || '').trim();
@@ -139,7 +143,6 @@
 
     function ensureCalendlyLoaded(){
       if (calendlyLoaded) return;
-      // Injecte le widget inline de Calendly à la demande
       calBody.innerHTML = `
         <div class="calendly-inline-widget" data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1" style="min-width:320px;height:100%;"></div>
       `;
@@ -172,33 +175,53 @@
       `;
       document.querySelector('.shell').replaceWith(err);
     } else {
+      // ───────── Player Cloudflare Stream (SDK officiel) ─────────
+      // ► REMPLIR VOTRE CODE CLIENT ICI pour utiliser l'iframe "customer-..."
+      //   Si non fourni, fallback sur iframe.videodelivery.net + écoute postMessage
+      const CUSTOMER_CODE = '' /* ex: 'abcd1234efgh5678' */;
+
+      // Construit l'URL de l'iframe
+      const src = CUSTOMER_CODE
+        ? `https://customer-${CUSTOMER_CODE}.cloudflarestream.com/${encodeURIComponent(id)}/iframe?controls=true&playsinline=true&defaultTextTrack=fr`
+        : `https://iframe.videodelivery.net/${encodeURIComponent(id)}?controls=true&playsinline=true&defaultTextTrack=fr`;
+
       const iframe = document.createElement('iframe');
       iframe.id = 'stream-player';
-      iframe.src = `https://iframe.videodelivery.net/${encodeURIComponent(id)}?controls=true&playsinline=true&defaultTextTrack=fr`;
+      iframe.src = src;
       iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
       iframe.allowFullscreen = true;
       iframe.title = 'Lecteur vidéo Cloudflare Stream';
       root.replaceChildren(iframe);
 
-      // Écoute de fin de vidéo via postMessage du player Cloudflare Stream
-      // Remarque : selon les versions, ev.data peut être une string JSON
-      // ou un objet déjà parsé. On gère les deux et on filtre par origin.
-      window.addEventListener('message', (ev)=>{
-        try{
-          // Filtre l'origine pour éviter les faux positifs
-          const host = new URL(ev.origin).hostname || '';
-          if (!host.endsWith('videodelivery.net')) return;
-
-          let data = ev.data;
-          if (typeof data === 'string') {
-            try { data = JSON.parse(data); } catch(_) { /* ignore parse error */ }
-          }
-
-          if (data && (data.event === 'ended' || (data.msg && data.msg.event === 'ended'))) {
-            openCalendly('ended');
-          }
-        }catch(_){ /* no-op */ }
-      });
+      // Si on a un CUSTOMER_CODE, on utilise l'API SDK officielle Stream(...)
+      if (CUSTOMER_CODE && typeof window.Stream === 'function') {
+        const player = Stream(iframe);
+        // Événement standard: fin de lecture
+        player.addEventListener('ended', () => {
+          openCalendly('ended');
+        });
+        // Fallback de sûreté: si jamais 'ended' rate, détecter ~100% vu
+        player.addEventListener('timeupdate', () => {
+          try{
+            const dur = player.duration || 0;
+            const cur = player.currentTime || 0;
+            if (dur > 0 && cur / dur >= 0.995) openCalendly('ended');
+          }catch(_){/* no-op */}
+        });
+      } else {
+        // Fallback historique via postMessage depuis iframe.videodelivery.net
+        window.addEventListener('message', (ev)=>{
+          try{
+            const host = ev.origin ? new URL(ev.origin).hostname : '';
+            if (host && !host.endsWith('videodelivery.net')) return;
+            let data = ev.data;
+            if (typeof data === 'string') { try { data = JSON.parse(data); } catch(_){} }
+            if (data && (data.event === 'ended' || (data.msg && data.msg.event === 'ended'))) {
+              openCalendly('ended');
+            }
+          }catch(_){ }
+        });
+      }
     }
   </script>
 </body>
