@@ -5,61 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vidéo</title>
 
-  <style>
-    :root {
-      /* marge autour + position CTA */
-      --gap: clamp(12px, 3vw, 32px);
-    }
+  <!-- PERF PRIORITÉ VIDÉO : rien de bloquant, tout en async/defer -->
+  <!-- Cloudflare Stream: réchauffage -->
+  <link rel="dns-prefetch" href="https://iframe.cloudflarestream.com">
+  <link rel="preconnect" href="https://iframe.cloudflarestream.com" crossorigin>
+  <link rel="dns-prefetch" href="https://embed.cloudflarestream.com">
+  <link rel="preconnect" href="https://embed.cloudflarestream.com" crossorigin>
 
+  <!-- Calendly: réchauffage + préchargement du script (puis async) -->
+  <link rel="dns-prefetch" href="https://assets.calendly.com">
+  <link rel="preconnect" href="https://assets.calendly.com" crossorigin>
+  <link rel="dns-prefetch" href="https://calendly.com">
+  <link rel="preconnect" href="https://calendly.com" crossorigin>
+  <link rel="preload" as="script" href="https://assets.calendly.com/assets/external/widget.js">
+
+  <style>
+    :root { --gap: clamp(12px, 3vw, 32px); }
     html, body { margin:0; height:100%; background:#000; overflow:hidden; }
 
-    /* zone centrale avec padding = garde respirante */
-    .stage {
-      position: fixed; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      padding: var(--gap);
-      box-sizing: border-box;
-      background: #000;
-    }
-
-    /* cadre de la vidéo : largeur limitée + 16/9 + limite en hauteur */
-    .frame {
-      width: clamp(320px, 88vw, 1100px);   /* ↓ réduit la taille sur desktop */
-      aspect-ratio: 16 / 9;
-      max-height: 68vh;                    /* ↓ laisse de l’air verticalement */
-      border-radius: 14px;
-      overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0,0,0,.35);
-      background: #000;
-    }
-
-    /* mobile : encore un peu plus compact */
-    @media (max-width: 640px) {
-      .frame { width: 96vw; max-height: 58vh; }
-    }
-
-    /* l’iframe remplit la boîte 16/9 */
+    /* scène centrée avec marge respirante */
+    .stage { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; padding: var(--gap); box-sizing: border-box; background:#000; }
+    .frame { width: clamp(320px, 88vw, 1100px); aspect-ratio: 16 / 9; max-height: 68vh; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.35); background:#000; }
+    @media (max-width: 640px) { .frame { width: 96vw; max-height: 58vh; } }
     #player { width: 100%; height: 100%; border: 0; object-fit: cover; background:#000; }
 
-    /* --- CTA --- */
+    /* CTA */
     .cta {
-      position: fixed;
-      right: var(--gap);
-      bottom: var(--gap);
-      z-index: 30;
+      position: fixed; right: var(--gap); bottom: var(--gap); z-index: 30;
       background:#006BFF; color:#fff; border:0; border-radius:16px;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      font-weight: 700; letter-spacing:.2px;
-      padding: 14px 16px; font-size: 14px; line-height: 1.1;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
-      cursor:pointer; user-select:none; -webkit-tap-highlight-color: transparent;
+      font-weight: 700; letter-spacing:.2px; padding: 14px 16px; font-size: 14px; line-height: 1.1;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35); cursor:pointer; user-select:none; -webkit-tap-highlight-color: transparent;
     }
     .cta:active { transform: translateY(1px); }
-    @media (min-width: 1024px) {
-      .cta { padding: 22px 26px; font-size: 18px; border-radius:20px; }
-    }
+    @media (min-width: 1024px) { .cta { padding: 22px 26px; font-size: 18px; border-radius:20px; } }
 
-    /* --- Modal Calendly --- */
+    /* Modal Calendly (pré-initialisé mais caché → prêt instantanément au clic/fin vidéo) */
     .modal { position:fixed; inset:0; z-index:50; display:none; background:rgba(0,0,0,.65); backdrop-filter:blur(2px); }
     .modal__panel { position:absolute; inset: var(--gap); background:#fff; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; box-shadow: 0 20px 60px rgba(0,0,0,.45); }
     .modal__head { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#0b1220; color:#fff; font:600 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
@@ -68,13 +49,13 @@
     .calendly-inline-widget { width:100%; height:100%; min-width:320px; }
   </style>
 
-  <!-- CF Player SDK -->
+  <!-- CF Player SDK (defer = non bloquant) -->
   <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js?v=3" defer></script>
-  <!-- Calendly -->
+  <!-- Calendly (le script a été preloaded ; async = non bloquant) -->
   <script src="https://assets.calendly.com/assets/external/widget.js" async></script>
 </head>
 <body>
-  <!-- Vidéo dans un cadre 16/9 limité -->
+  <!-- Vidéo -->
   <div class="stage">
     <div class="frame">
       <iframe id="player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="eager"></iframe>
@@ -84,7 +65,7 @@
   <!-- CTA -->
   <button id="cta" class="cta">📞 Réservez un Rendez-Vous !</button>
 
-  <!-- Modal Calendly -->
+  <!-- Modal Calendly (caché mais présent → prêt dès que le script charge) -->
   <div id="cal-modal" class="modal" aria-hidden="true">
     <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Réserver un rendez-vous">
       <div class="modal__head">
@@ -93,7 +74,8 @@
       </div>
       <div class="modal__body">
         <div class="calendly-inline-widget"
-             data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1"></div>
+             data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1">
+        </div>
       </div>
     </div>
   </div>
@@ -102,7 +84,9 @@
     (function () {
       "use strict";
 
-      // === Params & perso ===
+      /* ============================
+       * 1) PARAMS & PERSONNALISATION
+       * ============================ */
       const qp = new URLSearchParams(location.search);
       const f  = (qp.get("f")  || "").trim();
       const l  = (qp.get("l")  || "").trim();
@@ -115,14 +99,20 @@
       const cta = document.getElementById("cta");
       cta.textContent = `📞 ${prettyF}, Réservez un Rendez-Vous !`;
 
-      // === Session & Player ===
+      /* ============================
+       * 2) SESSION & PLAYER
+       * ============================ */
       const sessionId = (self.crypto && crypto.randomUUID)
         ? `sid_${id.slice(0,8)}_${crypto.randomUUID().slice(0,8)}`
         : `sid_${id.slice(0,8)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
+
       const iframe = document.getElementById("player");
+      // Player API (pas /watch) — priorité perf: l’iframe se charge tout de suite
       iframe.src = `https://iframe.cloudflarestream.com/${id}?v=3`;
 
-      // === Tracking helper ===
+      /* ============================
+       * 3) TRACKING helper (non bloquant)
+       * ============================ */
       const WEB_APP = "https://script.google.com/macros/s/AKfycbyFxJ2lUMtuB44kud-xGFcMGudW2J5G2UWMD2QtjvolJiUpRtA4zeX9e4_KieRIlzaF-g/exec";
       function ping(ev, extra) {
         const base = { ev, f, l, id, d, sessionId, ua:navigator.userAgent, ref:document.referrer||"", w:String(innerWidth||0), h:String(innerHeight||0), ts:String(Date.now()) };
@@ -135,8 +125,6 @@
         } catch(_) {}
         fetch(WEB_APP + "?" + payload.toString(), { method:"GET", mode:"no-cors", keepalive:true }).catch(()=>{});
       }
-
-      // Page ouverte
       (function openedOnce(){
         const key = `aqi_opened_${id}_${d||"nodate"}`;
         const first = !localStorage.getItem(key);
@@ -144,7 +132,9 @@
         ping("opened", { first: first ? "1" : "0", cur:"0", dur:"0" });
       })();
 
-      // === Modal Calendly (réouvrable) ===
+      /* ============================
+       * 4) CALENDLY MODAL (pré-initialisé, réouvrable)
+       * ============================ */
       const modal = document.getElementById("cal-modal");
       const closeBtn = document.getElementById("cal-close");
       function showCalendly(){ modal.style.display="block"; modal.setAttribute("aria-hidden","false"); ping("calendly_open"); }
@@ -154,12 +144,37 @@
       modal.addEventListener("click", (e)=>{ if(e.target === modal) hideCalendly(); });
       addEventListener("keydown", (e)=>{ if(e.key==="Escape") hideCalendly(); });
 
-      // === Player + tracking 1s ===
+      /* ============================
+       * 5) PLAYER + TRACKING 1s + ST FR par défaut
+       * ============================ */
       function onReady(cb){ (document.readyState === "complete" ? cb : addEventListener("load", cb)); }
       onReady(function(){
         if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
         const player = Stream(iframe);
 
+        // --- SOUS-TITRES FR PAR DÉFAUT (non bloquant) ---
+        // Essaie vite et peu de fois, puis s'arrête (aucun impact perf)
+        (function enableFrenchCaptions(){
+          let tries = 0, maxTries = 10;
+          const tick = setInterval(() => {
+            tries++;
+            try {
+              if (typeof player.setTextTrack === "function") {
+                player.setTextTrack("fr"); clearInterval(tick); return;
+              }
+              const tt = player.textTracks || [];
+              for (let i=0;i<tt.length;i++){
+                const lang = (tt[i].language || tt[i].label || "").toLowerCase();
+                if (lang.startsWith("fr")) { tt[i].mode = "showing"; clearInterval(tick); return; }
+              }
+            } catch(_) {}
+            if (tries >= maxTries) clearInterval(tick);
+          }, 300);
+          player.addEventListener("loadedmetadata", enableFrenchCaptions);
+          player.addEventListener("playing", enableFrenchCaptions);
+        })();
+
+        // --- Tracking à la seconde (client-side) ---
         let duration = 0, launched = false;
         const sentSeconds = new Set();
         let tick = null;
