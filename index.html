@@ -4,36 +4,49 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Regardez la Vidéo — Aqisio</title>
-
   <!--
-    🔹 OBJECTIF
-    LP la plus simple possible.
-    → Affiche la vidéo Cloudflare Stream selon l’UID passé dans ?id=
-    → Aucun élément décoratif.
-    → Design centré, responsive, rapide à charger.
+    But : vidéo la + grande possible, stable sur tous navigateurs.
+    Changement clé : on abandonne aspect-ratio sur <iframe> (qui peut être
+    capricieux) pour un wrapper responsive classique (padding-top 56.25%).
   -->
-
   <style>
     :root { color-scheme: dark; }
+    html, body { height: 100%; }
     body {
       margin: 0;
       background: #0b0b0b;
       color: #fff;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      display: grid;
+      place-items: center;
       min-height: 100dvh;
     }
-    .player {
-      width: min(960px, 100%);
-      aspect-ratio: 16/9;
-      border: 0;
-      border-radius: 12px;
+
+    /*
+      Zone centrale : on limite à 1280px mais on remplit jusqu'à 92vw.
+      On force un ratio 16/9 via le "padding-top".
+    */
+    .frame {
+      width: clamp(320px, 92vw, 1280px);
+      max-width: 1280px;
+      position: relative;
+      /* 16/9 => 9/16 = 56.25% */
+      padding-top: 56.25%;
       background: #000;
+      border-radius: 12px; /* optionnel, visuel discret */
+      overflow: hidden;
     }
+    .frame iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
     .error {
-      max-width: 600px;
+      max-width: 680px;
+      margin: 24px;
       padding: 20px;
       background: #2b1111;
       color: #ffd7d7;
@@ -45,28 +58,20 @@
   </style>
 </head>
 <body>
-  <div id="video-slot"></div>
+  <div id="root"></div>
 
   <script>
-    // ────────────────────────────────────────────────
-    // Lecture des paramètres d’URL
-    // ────────────────────────────────────────────────
-    const qs = new URLSearchParams(window.location.search);
+    // Récupération des paramètres d'URL
+    const qs = new URLSearchParams(location.search);
     const f  = (qs.get('f')  || '').trim();
     const l  = (qs.get('l')  || '').trim();
     const id = (qs.get('id') || '').trim();
     const d  = (qs.get('d')  || '').trim();
 
-    // Mise à jour du titre si prénom/nom présents
-    if (f || l) {
-      document.title = `${f} ${l} — Regardez la Vidéo`;
-    }
+    if (f || l) document.title = `${f} ${l} — Regardez la Vidéo`;
 
-    const videoSlot = document.getElementById('video-slot');
+    const root = document.getElementById('root');
 
-    // ────────────────────────────────────────────────
-    // Affichage : vidéo ou message d’erreur
-    // ────────────────────────────────────────────────
     if (!id) {
       const err = document.createElement('div');
       err.className = 'error';
@@ -75,19 +80,21 @@
         Exemple d’URL correcte :<br>
         <code>?f=Cyril&l=GUERRY&id=0bf4f564089a51d49d457a4ce0b6fede&d=2025-01-01</code>
       `;
-      videoSlot.replaceChildren(err);
+      root.replaceChildren(err);
     } else {
-      const iframeSrc = `https://iframe.videodelivery.net/${encodeURIComponent(id)}?controls=true&playsinline=true&defaultTextTrack=fr`;
+      // Wrapper responsive, l'iframe occupe 100% de la zone
+      const frame = document.createElement('div');
+      frame.className = 'frame';
 
       const iframe = document.createElement('iframe');
       iframe.id = 'stream-player';
-      iframe.className = 'player';
-      iframe.src = iframeSrc;
+      iframe.src = `https://iframe.videodelivery.net/${encodeURIComponent(id)}?controls=true&playsinline=true&defaultTextTrack=fr`;
       iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
       iframe.allowFullscreen = true;
-      iframe.setAttribute('title', 'Lecteur vidéo Cloudflare Stream');
+      iframe.title = 'Lecteur vidéo Cloudflare Stream';
 
-      videoSlot.replaceChildren(iframe);
+      frame.appendChild(iframe);
+      root.replaceChildren(frame);
     }
   </script>
 </body>
