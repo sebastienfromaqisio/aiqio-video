@@ -108,7 +108,8 @@
 
       const iframe = document.getElementById("player");
       // Player API (pas /watch) — priorité perf: l’iframe se charge tout de suite
-      iframe.src = `https://iframe.cloudflarestream.com/${id}?v=3`;
+      // Sous-titres fr par défaut via paramètre d'URL (BCP47: 'fr')
+      iframe.src = `https://iframe.cloudflarestream.com/${id}?v=3&defaultTextTrack=fr`;
 
       /* ============================
        * 3) TRACKING helper (non bloquant)
@@ -145,34 +146,12 @@
       addEventListener("keydown", (e)=>{ if(e.key==="Escape") hideCalendly(); });
 
       /* ============================
-       * 5) PLAYER + TRACKING 1s + ST FR par défaut
+       * 5) PLAYER + TRACKING 1s
        * ============================ */
       function onReady(cb){ (document.readyState === "complete" ? cb : addEventListener("load", cb)); }
       onReady(function(){
         if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
         const player = Stream(iframe);
-
-        // --- SOUS-TITRES FR PAR DÉFAUT (non bloquant) ---
-        // Essaie vite et peu de fois, puis s'arrête (aucun impact perf)
-        (function enableFrenchCaptions(){
-          let tries = 0, maxTries = 10;
-          const tick = setInterval(() => {
-            tries++;
-            try {
-              if (typeof player.setTextTrack === "function") {
-                player.setTextTrack("fr"); clearInterval(tick); return;
-              }
-              const tt = player.textTracks || [];
-              for (let i=0;i<tt.length;i++){
-                const lang = (tt[i].language || tt[i].label || "").toLowerCase();
-                if (lang.startsWith("fr")) { tt[i].mode = "showing"; clearInterval(tick); return; }
-              }
-            } catch(_) {}
-            if (tries >= maxTries) clearInterval(tick);
-          }, 300);
-          player.addEventListener("loadedmetadata", enableFrenchCaptions);
-          player.addEventListener("playing", enableFrenchCaptions);
-        })();
 
         // --- Tracking à la seconde (client-side) ---
         let duration = 0, launched = false;
