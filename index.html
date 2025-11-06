@@ -9,53 +9,38 @@
     .video-wrapper { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
     iframe { width:100vw; height:100vh; border:0; object-fit:cover; }
   </style>
-  <!-- SDK du Player Cloudflare (API d'événements) -->
-  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js" defer></script>
+  <!-- SDK du Player Cloudflare -->
+  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js?v=2" defer></script>
 </head>
-
-<body data-account-base="https://customer-g50chvgfq5q94nqo.cloudflarestream.com">
+<body>
   <div class="video-wrapper">
-    <iframe id="player"
-      allow="autoplay; fullscreen; picture-in-picture"
-      allowfullscreen
-      loading="eager"></iframe>
+    <iframe id="player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="eager"></iframe>
   </div>
 
   <script>
     (function () {
       "use strict";
 
-      /* ============================
-       * 1) PARAMÈTRES D’URL (mapping)
-       * ============================ */
+      // --- Params URL ---
       const qp = new URLSearchParams(location.search);
-      const f  = (qp.get("f")  || "").trim();   // prénom
-      const l  = (qp.get("l")  || "").trim();   // nom
-      const id = (qp.get("id") || "").trim();   // id vidéo (hex32 Cloudflare)
-      const d  = (qp.get("d")  || "").trim();   // date info (optionnelle)
-
+      const f  = (qp.get("f")  || "").trim();
+      const l  = (qp.get("l")  || "").trim();
+      const id = (qp.get("id") || "").trim();
+      const d  = (qp.get("d")  || "").trim();
       if (!/^[a-f0-9]{32}$/i.test(id)) { console.error("Stream ID invalide"); return; }
 
-      /* =======================================
-       * 2) SESSION (identifie un visionnage)
-       * ======================================= */
+      // --- Session stable pour ce visionnage ---
       const sessionId =
         (self.crypto && crypto.randomUUID)
           ? `sid_${id.slice(0,8)}_${crypto.randomUUID().slice(0,8)}`
           : `sid_${id.slice(0,8)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
 
-      /* =======================================
-       * 3) PLAYER CF (iframe + SDK)
-       * ======================================= */
+      // --- Player (iframe API, pas /watch) ---
       const $iframe = document.getElementById("player");
-      // IMPORTANT: iframe compatible API (et non .../watch)
-      $iframe.src = `https://iframe.cloudflarestream.com/${id}`;
+      $iframe.src = `https://iframe.cloudflarestream.com/${id}?v=2`; // cache-busting léger
 
-      /* =======================================
-       * 4) TRACKING (Apps Script)
-       * ======================================= */
+      // --- Tracking helper ---
       const WEB_APP = "https://script.google.com/macros/s/AKfycbyFxJ2lUMtuB44kud-xGFcMGudW2J5G2UWMD2QtjvolJiUpRtA4zeX9e4_KieRIlzaF-g/exec";
-
       function ping(ev, extra) {
         const base = {
           ev, f, l, id, d, sessionId,
@@ -66,30 +51,26 @@
           ts: String(Date.now())
         };
         const payload = new URLSearchParams(Object.assign(base, extra || {}));
-
         try {
           if (navigator.sendBeacon) {
             const blob = new Blob([payload.toString()], { type: "application/x-www-form-urlencoded" });
             navigator.sendBeacon(WEB_APP, blob);
             return;
           }
-        } catch (_) {}
+        } catch(_) {}
         fetch(WEB_APP + "?" + payload.toString(), { method: "GET", mode: "no-cors", keepalive: true }).catch(()=>{});
       }
 
-      // Ouverture de page (comme avant)
+      // Ouverture page
       (function openedOnce(){
         const key = `aqi_opened_${id}_${d||"nodate"}`;
         const first = !localStorage.getItem(key);
-        try { localStorage.setItem(key, "1"); } catch(e){}
+        try { localStorage.setItem(key,"1"); } catch(e){}
         ping("opened", { first: first ? "1" : "0", cur: "0", dur: "0" });
       })();
 
-      /* =======================================
-       * 5) ÉVÉNEMENTS PLAYER + TRACKING 1s
-       * ======================================= */
+      // --- Écoute player + TIMER 1s ---
       function onReady(cb){ (document.readyState === "complete" ? cb : window.addEventListener("load", cb)); }
-
       onReady(function(){
         if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
         const player = Stream($iframe);
@@ -97,11 +78,11 @@
         let duration = 0;
         let launchedSent = false;
 
-        // Ensemble des secondes déjà envoyées (évite doublons à cause des multiples timeupdate)
+        // seconds déjà envoyées pour cette session
         const sentSeconds = new Set();
 
-        // Pour tracer les "seek"
-        let lastSecForSeek = 0;
+        // timer de “poll” 1s (uniquement quand la vidéo joue)
+        let tick = null;
 
         const getTimes = () => {
           const ct = Math.max(0, Math.floor(Number(player.currentTime || 0)));
@@ -110,61 +91,55 @@
           return { cur: String(ct), dur: String(du) };
         };
 
+        function startTick(){
+          if (tick) return;
+          tick = setInterval(() => {
+            const t = getTimes();
+            const s = Number(t.cur);
+            if (!sentSeconds.has(s)) {
+              sentSeconds.add(s);
+              ping("sec", t);               // <-- UNE LIGNE PAR SECONDE
+            }
+          }, 1000);
+        }
+        function stopTick(){
+          if (tick) { clearInterval(tick); tick = null; }
+        }
+
         player.addEventListener("durationchange", () => {
           const du = Math.floor(Number(player.duration || 0));
           if (du > 0) duration = du;
         });
 
         player.addEventListener("playing", () => {
-          if (!launchedSent) {
-            launchedSent = true;
-            ping("launched", getTimes());
-          }
+          if (!launchedSent) { launchedSent = true; ping("launched", getTimes()); }
+          startTick();
         });
 
         player.addEventListener("pause", () => {
           ping("pause", getTimes());
+          stopTick();
         });
 
         player.addEventListener("ended", () => {
-          // Envoie aussi la dernière seconde si non envoyée
           const t = getTimes();
           const s = Number(t.cur);
           if (!sentSeconds.has(s)) { sentSeconds.add(s); ping("sec", t); }
           ping("completed", t);
+          stopTick();
         });
 
-        player.addEventListener("seeking", () => {
-          // mémorise le point de départ du seek
+        // Seek (facultatif, utile pour l’analyse fine)
+        let seekFrom = 0;
+        player.addEventListener("seeking", () => { seekFrom = Number(getTimes().cur); });
+        player.addEventListener("seeked",  () => {
           const t = getTimes();
-          lastSecForSeek = Number(t.cur);
+          ping("seek", Object.assign({}, t, { from: String(seekFrom), to: t.cur }));
         });
 
-        player.addEventListener("seeked", () => {
-          const t = getTimes();
-          const now = Number(t.cur);
-          // "seek" avec from / to (dans extra, on stocke from/to en plus de cur/dur)
-          ping("seek", Object.assign({}, t, { from: String(lastSecForSeek), to: String(now) }));
-        });
-
-        // --- GRANULARITÉ 1 SECONDE ---
-        // À chaque timeupdate, on envoie un ping "sec" quand on franchit une seconde entière non encore envoyée.
-        player.addEventListener("timeupdate", () => {
-          const t = getTimes();
-          const sec = Number(t.cur);
-          if (duration && duration < 3) return; // ignore vidéos ultra-courtes (bruit)
-
-          if (!sentSeconds.has(sec)) {
-            sentSeconds.add(sec);
-            ping("sec", t);
-          }
-        });
-
-        // Sécurité : si l’onglet se ferme, on tente d’envoyer le dernier point connu
+        // Dernier point si l’onglet se ferme
         window.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "hidden") {
-            ping("hidden", getTimes());
-          }
+          if (document.visibilityState === "hidden") ping("hidden", getTimes());
         });
         window.addEventListener("pagehide", () => {
           ping("pagehide", getTimes());
@@ -174,4 +149,3 @@
   </script>
 </body>
 </html>
-
