@@ -181,13 +181,23 @@
       root.replaceChildren(iframe);
 
       // Écoute de fin de vidéo via postMessage du player Cloudflare Stream
+      // Remarque : selon les versions, ev.data peut être une string JSON
+      // ou un objet déjà parsé. On gère les deux et on filtre par origin.
       window.addEventListener('message', (ev)=>{
         try{
-          // Le player envoie des events {event: 'ended' | 'play' | ...}
-          if (typeof ev.data === 'object' && ev.data && ev.data.event === 'ended') {
+          // Filtre l'origine pour éviter les faux positifs
+          const host = new URL(ev.origin).hostname || '';
+          if (!host.endsWith('videodelivery.net')) return;
+
+          let data = ev.data;
+          if (typeof data === 'string') {
+            try { data = JSON.parse(data); } catch(_) { /* ignore parse error */ }
+          }
+
+          if (data && (data.event === 'ended' || (data.msg && data.msg.event === 'ended'))) {
             openCalendly('ended');
           }
-        }catch(_){/* no-op */}
+        }catch(_){ /* no-op */ }
       });
     }
   </script>
