@@ -3,160 +3,185 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Vidéo personnalisée</title>
+
+  <!-- PERFORMANCE : pas de lib externe, pas de CSS externe, JS en "defer".
+       ACCESSIBILITÉ : titre personnalisé si possible, sinon titre générique. -->
+  <title id="page-title">Votre vidéo personnalisée</title>
+
+  <!-- (OPTION) Micro-optimisations réseau vers le domaine vidéo Cloudflare -->
+  <link rel="preconnect" href="https://customer-g50chvgfq5q94nqo.cloudflarestream.com" crossorigin>
+  <meta name="color-scheme" content="light dark">
+
   <style>
-    :root { color-scheme: light dark; }
-    html, body { height:100%; margin:0; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-           line-height:1.4; display:grid; place-items:start center; padding:16px;
-           background: Canvas; color: CanvasText; }
-    .wrap { width:min(900px,100%); }
-    h1 { margin:0 0 8px; font-size:1.25rem; }
-    .meta { font-size:.95rem; opacity:.8; margin-bottom:12px; }
-    .notice { font-size:.95rem; background: color-mix(in srgb, CanvasText 8%, Canvas);
-              border:1px solid color-mix(in srgb, CanvasText 18%, Canvas);
-              padding:10px; border-radius:8px; margin:12px 0; }
-    .err { color:#b00020; font-weight:600; }
-    .video-box { width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; }
-    iframe, .video-box>* { width:100%; height:100%; border:0; display:block; }
-    .help, .diag { font-size:.9rem; opacity:.85; margin-top:10px; }
-    code { white-space:nowrap; }
-    details { margin-top:10px; }
+    /* Ultra-minimal : juste de quoi rendre propre sans fichier externe */
+    :root { --maxw: 820px; --pad: 16px; --radius: 12px; }
+    html, body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: clamp(16px, 4vw, 32px); }
+    h1 { font-size: clamp(20px, 3.5vw, 28px); line-height: 1.25; margin: 0 0 12px; }
+    p.lead { margin: 0 0 16px; opacity:.8 }
+    .video-shell {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;         /* Maintient le ratio sans calcul JS */
+      background: #000;             /* Placeholder avant chargement */
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 6px 24px rgba(0,0,0,.12);
+    }
+    .video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      border: 0;
+    }
+    .err {
+      padding: var(--pad);
+      border-radius: var(--radius);
+      background: #fff3cd; color: #664d03; border: 1px solid #ffecb5;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    footer { margin-top: 18px; font-size: 12px; opacity:.6 }
+    .sr-only { position:absolute; left:-9999px; }
   </style>
-
-  <!-- Préconnect utiles -->
-  <link rel="dns-prefetch" href="https://iframe.cloudflarestream.com">
-  <link rel="preconnect" href="https://iframe.cloudflarestream.com" crossorigin>
-  <link rel="dns-prefetch" href="https://video.aqisio.com">
-  <link rel="preconnect" href="https://video.aqisio.com" crossorigin>
-
-  <!-- CSP permissive pour l’embed Cloudflare -->
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 img-src 'self' data:;
-                 style-src 'self' 'unsafe-inline';
-                 script-src 'self';
-                 frame-src https://iframe.cloudflarestream.com https://video.aqisio.com;
-                 connect-src 'self';
-                 base-uri 'none';
-                 form-action 'none'">
 </head>
-<body>
-  <main class="wrap">
-    <h1 id="title">Votre vidéo personnalisée</h1>
-    <div id="meta" class="meta"></div>
-    <div id="alerts"></div>
 
-    <div id="player" class="video-box" aria-label="Lecteur vidéo Cloudflare Stream"></div>
+<!-- DATA-CONTRACT :
+     - data-account-base = domaine Cloudflare Stream de votre compte
+       >>> correspond directement à la "racine" d’hébergement de TOUTES les vidéos
+       >>> ex : https://customer-XXXX.cloudflarestream.com
+     - Les paramètres d’URL mappés :
+       ?f=Prénom  --> utilisé pour personnaliser le texte
+       ?l=NOM     --> utilisé pour personnaliser le texte (mis en MAJ)
+       ?id=VIDEO_ID_HEX32 --> correspond EXACTEMENT à l’ID de la vidéo Cloudflare
+       ?d=YYYY-MM-DD       --> date affichée à titre informatif
+-->
+<body data-account-base="https://customer-g50chvgfq5q94nqo.cloudflarestream.com">
+  <div class="wrap">
+    <h1 id="hero">Votre vidéo personnalisée</h1>
+    <p class="lead" id="meta">Chargement de la vidéo…</p>
 
-    <p class="help">
-      Paramètres attendus : <code>?f=Prénom&amp;l=Nom&amp;id=VIDEO_UID&amp;d=YYYY-MM-DD</code> (+ optionnel <code>cf=custom|global</code>).
-      Exemple : <code>https://video.aqisio.com/?f=Cyril&amp;l=GUERRY&amp;id=0bf4f564089a51d49d457a4ce0b6fede&amp;d=2025-01-01</code>
+    <!-- La vidéo :
+         - On utilise un <iframe> vers l’URL /{id}/watch (Cloudflare Stream)
+         - L’attribut src est défini PAR LE SCRIPT selon ?id=...
+         - loading="lazy" pour la perf; changer en "eager" si vidéo au-dessus de la ligne de flottaison et critique -->
+    <div class="video-shell">
+      <iframe id="player" class="video"
+              title="Vidéo personnalisée"
+              src=""           <!-- REMPLI par JS ; structure finale : {ACCOUNT_BASE}/{id}/watch -->
+              allow="autoplay; fullscreen; picture-in-picture"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade">
+      </iframe>
+    </div>
+
+    <!-- Fallback en lien direct si JS désactivé (rempli dynamiquement sinon caché) -->
+    <p id="fallback" class="sr-only">
+      Si la vidéo ne s’affiche pas, ouvrez-la directement :
+      <a id="fallback-link" href="#" rel="noopener">ouvrir la vidéo</a>
     </p>
 
-    <details>
-      <summary>Diagnostic / Liens d’embed testables</summary>
-      <div id="diag" class="diag"></div>
-    </details>
+    <div id="error" class="err" hidden></div>
 
-    <noscript><p class="notice err">JavaScript est requis pour initialiser le lecteur Cloudflare Stream.</p></noscript>
-  </main>
+    <footer>
+      Cette page ne charge aucune librairie tierce. Tout est statique, orienté performance.
+    </footer>
+  </div>
 
-  <script>
-    // ========= PARAMS / UTIL =========
-    const qs = new URLSearchParams(location.search);
-    const get = k => (qs.get(k) || "").trim();
-    const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const isValidId = id => /^[a-f0-9]{32}$|^[a-f0-9-]{36}$/i.test(id); // UID Stream courant (32 hex ou UUID v4)
-    const isValidISODate = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
+  <script defer>
+    (function () {
+      "use strict";
 
-    const f = get('f'), l = get('l'), id = get('id'), d = get('d');
-    const cfMode = (get('cf').toLowerCase()); // "", "custom" ou "global"
+      // ===== 1) RÉCUPÈRE LES PARAMÈTRES DANS L’URL COURANTE =====
+      const qp = new URLSearchParams(location.search);
 
-    const $title = document.getElementById('title');
-    const $meta  = document.getElementById('meta');
-    const $alerts= document.getElementById('alerts');
-    const $player= document.getElementById('player');
-    const $diag  = document.getElementById('diag');
+      // Mapping clair "URL -> Variables"
+      // f (first name)   --> firstName
+      // l (last name)    --> lastName
+      // id (video id)    --> videoId (validation stricte HEX32)
+      // d (date ISO)     --> dateIso (validation YYYY-MM-DD)
+      const firstName = (qp.get("f") || "").trim();
+      const lastName  = (qp.get("l") || "").trim();
+      const videoId   = (qp.get("id") || "").trim();
+      const dateIso   = (qp.get("d") || "").trim();
 
-    const fullName = [f, l].filter(Boolean).join(' ').trim();
-    if (fullName) { document.title = `Vidéo personnalisée pour ${fullName}`; $title.textContent = `Votre vidéo personnalisée, ${fullName}`; }
-    const meta = [];
-    if (fullName) meta.push(`Destinataire : ${esc(fullName)}`);
-    if (d && isValidISODate(d)) meta.push(`Date prévue : ${esc(d)}`);
-    if (cfMode) meta.push(`Mode forcé : ${esc(cfMode)}`);
-    if (meta.length) $meta.innerHTML = meta.map(esc).join(' · ');
-
-    // ========= CONTRÔLES =========
-    const issues = [];
-    if (!id) issues.push("Paramètre manquant : <code>id</code> (UID vidéo Cloudflare Stream).");
-    if (id && !isValidId(id)) issues.push("Format d’<code>id</code> inattendu — vérifie que c’est bien le <strong>UID Stream</strong> (pas un ID interne).");
-
-    if (issues.length) {
-      $alerts.innerHTML = `<div class="notice err">${issues.join("<br>")}</div>`;
-    } else {
-      // ========= CONSTRUCTION DES URLS D'EMBED =========
-      // NB Cloudflare :
-      // - Domaine global :      https://iframe.cloudflarestream.com/{UID}
-      // - Custom domain Stream: https://<ton-domaine>/{UID}/iframe
-      const urls = {
-        custom: `https://video.aqisio.com/${encodeURIComponent(id)}/iframe`,
-        global: `https://iframe.cloudflarestream.com/${encodeURIComponent(id)}`
+      // ===== 2) RÉFÉRENCES DOM =====
+      const els = {
+        title: document.getElementById("page-title"),
+        hero: document.getElementById("hero"),
+        meta: document.getElementById("meta"),
+        player: document.getElementById("player"),
+        error: document.getElementById("error"),
+        fallback: document.getElementById("fallback"),
+        fallbackLink: document.getElementById("fallback-link"),
       };
-      // Params light côté player (peu d’IO initial)
-      const params = new URLSearchParams({ controls: '1', preload: 'metadata' });
-      const makeSrc = (u) => `${u}?${params.toString()}`;
 
-      // Choix du mode :
-      // - si cf=custom|global est fourni → on respecte
-      // - sinon, heuristique : si la page tourne sur video.aqisio.com, on essaie d’abord custom, sinon global
-      const sameHostLooksCustom = location.hostname === 'video.aqisio.com';
-      const order = (cfMode === 'custom') ? ['custom']
-                  : (cfMode === 'global') ? ['global']
-                  : (sameHostLooksCustom ? ['custom','global'] : ['global','custom']);
+      // ===== 3) PARAMÈTRES COMPTE CLOUDFLARE STREAM =====
+      // Correspondance : <body data-account-base="..."> --> ACCOUNT_BASE
+      // Ce domaine est FIXE pour votre compte Cloudflare Stream
+      const ACCOUNT_BASE = (document.body.getAttribute("data-account-base") || "").replace(/\/+$/,"");
+      if (!ACCOUNT_BASE) {
+        showError("Configuration manquante : data-account-base n'est pas défini sur &lt;body&gt;.");
+        return;
+      }
 
-      // ========= INSERTION IFRAME + FALLBACK =========
-      // Stratégie simple : on tente la 1ère URL ; si échec perçu (timeout d’affichage),
-      // on propose l’autre URL dans la section Diagnostic (clic manuel).
-      const firstSrc = makeSrc(urls[order[0]]);
-      const secondSrc = order[1] ? makeSrc(urls[order[1]]) : null;
+      // ===== 4) VALIDATIONS MINIMALES (simples & rapides) =====
+      // VIDEO ID : Cloudflare Stream donne un identifiant hexadécimal (32 chars) -> on le filtre
+      const isValidVideoId = /^[a-f0-9]{32}$/i.test(videoId);
+      if (!isValidVideoId) {
+        showError("Paramètre 'id' absent ou invalide. Attendu : 32 caractères hexadécimaux.");
+        return;
+      }
 
-      const iframe = document.createElement('iframe');
-      iframe.src = firstSrc;
-      iframe.allow = "accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen";
-      iframe.setAttribute('allowfullscreen', 'true');
-      iframe.setAttribute('title', fullName ? `Vidéo pour ${fullName}` : 'Vidéo personnalisée');
-      iframe.loading = "eager";
-      $player.replaceChildren(iframe);
+      // DATE (optionnelle) : format YYYY-MM-DD
+      const isValidDate = dateIso === "" || /^\d{4}-\d{2}-\d{2}$/.test(dateIso);
 
-      // Prépare le diag (liens cliquables, très utile si l’UID est faux vs pb d’intégration)
-      $diag.innerHTML =
-        `<div class="notice">
-           <div><strong>URL testée #1 (${esc(order[0])}) :</strong> <a href="${esc(firstSrc)}" target="_blank" rel="noopener">ouvrir l’iframe seule</a></div>
-           ${secondSrc ? `<div><strong>URL testée #2 (${esc(order[1])}) :</strong> <a href="${esc(secondSrc)}" target="_blank" rel="noopener">ouvrir l’iframe seule</a></div>` : ``}
-           <div style="margin-top:6px; font-size:.9em; opacity:.9">
-             Si la vidéo s’ouvre en lien direct mais pas ici, c’est souvent un souci de <em>mode d’embed</em> ou de <em>CSP</em>.<br>
-             Si elle ne s’ouvre nulle part, l’<code>id</code> ne correspond probablement pas au <strong>UID Cloudflare Stream</strong> ou la lecture requiert un <strong>token signé</strong>.
-           </div>
-         </div>`;
+      // PRÉNOM/NOM (optionnels) : on nettoie pour affichage (lettres/espaces/apostrophes/tirets)
+      const cleanName = s => s.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ' -]/g, "");
+      const fn = cleanName(firstName);
+      const ln = cleanName(lastName).toUpperCase();  // Convention : NOM en MAJ
 
-      // Affiche un message doux si au bout de quelques secondes l’iframe n’a pas peint (symptôme fréquent en 404/token manquant)
-      setTimeout(() => {
-        // Impossible de lire l’état interne de l’iframe cross-origin ; on affiche un rappel d’aide générique.
-        // On n’écrase pas l’iframe, on ajoute juste un message.
-        if (!$alerts.innerHTML) {
-          $alerts.innerHTML =
-            `<div class="notice">
-               Si rien n’apparaît :
-               <ul style="margin:6px 0 0 18px">
-                 <li>Vérifie que <code>id</code> est bien le <strong>UID Stream</strong> (et non un ID interne).</li>
-                 <li>Essaie d’ajouter <code>&cf=global</code> ou <code>&cf=custom</code> à l’URL pour forcer le mode d’embed.</li>
-                 <li>Si Stream utilise des <strong>URL signées</strong>, il faut append <code>?token=&lt;JWT&gt;</code> (ce token doit être émis côté serveur).</li>
-               </ul>
-             </div>`;
-        }
-      }, 1800);
-    }
+      // ===== 5) CONSTRUCTION DES TEXTES =====
+      // Titre/entête : "Votre vidéo, Prénom NOM" si dispo
+      const hasName = fn || ln;
+      const prettyWho = hasName ? [fn, ln].filter(Boolean).join(" ") : "vous";
+      const prettyDate = (isValidDate && dateIso) ? ` — ${dateIso}` : "";
+
+      els.title.textContent = hasName ? `Vidéo pour ${prettyWho}` : "Votre vidéo personnalisée";
+      els.hero.textContent  = hasName ? `Votre vidéo, ${prettyWho}` : "Votre vidéo personnalisée";
+      els.meta.textContent  = `Lecture via Cloudflare Stream${prettyDate}`;
+
+      // ===== 6) CONSTRUCTION DE L’URL VIDÉO =====
+      // Correspondance EXACTE :
+      //   ACCOUNT_BASE + "/" + videoId + "/watch"
+      //   ex: https://customer-...cloudflarestream.com/6404.../watch
+      const videoSrc = `${ACCOUNT_BASE}/${videoId}/watch`;
+
+      // ===== 7) APPLICATION DANS LE DOM =====
+      els.player.src = videoSrc;
+      els.player.loading = "lazy"; // garder "eager" si vous voulez démarrer immédiatement
+
+      // Fallback lisible par l'utilisateur (et pour "ouvrir dans un nouvel onglet")
+      els.fallback.classList.remove("sr-only");
+      els.fallbackLink.href = videoSrc;
+
+      // ===== 8) PETIT GARDE-FOU SUR ERREURS DE CHARGEMENT IFRAME =====
+      // (les iframes ne "bubblent" pas toujours les erreurs ; on ajoute un timeout visible)
+      let safetyTimer = setTimeout(() => {
+        // Si la vidéo n’a pas commencé à charger après un court délai, on suggère le lien direct
+        // (Stratégie safe & minimaliste)
+        els.fallback.insertAdjacentHTML("beforeend", "<br>La lecture peut prendre quelques secondes selon le réseau.");
+      }, 2500);
+
+      // ===== 9) UTILITAIRES =====
+      function showError(msg) {
+        els.error.hidden = false;
+        els.error.innerHTML = msg;
+        els.meta.textContent = "Impossible d’afficher la vidéo.";
+        // On garde le fallback visible, mais sans lien valide si id invalide
+        els.fallback.classList.remove("sr-only");
+        els.fallbackLink.removeAttribute("href");
+      }
+    })();
   </script>
 </body>
 </html>
