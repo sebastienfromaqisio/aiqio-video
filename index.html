@@ -9,58 +9,142 @@
     .video-wrapper { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
     iframe { width:100vw; height:100vh; border:0; object-fit:cover; }
   </style>
+  <!-- SDK du Player Cloudflare (nécessaire pour écouter les events) -->
+  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js" defer></script>
 </head>
 
+<!-- data-account-base conservé (non utilisé ici) -->
 <body data-account-base="https://customer-g50chvgfq5q94nqo.cloudflarestream.com">
   <div class="video-wrapper">
-    <iframe id="player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="eager"></iframe>
+    <!-- IMPORTANT: utiliser l’iframe officielle du player CF pour l’API -->
+    <iframe id="player"
+      allow="autoplay; fullscreen; picture-in-picture"
+      allowfullscreen
+      loading="eager"></iframe>
   </div>
 
   <script>
     (function () {
       "use strict";
 
-      // --- paramètres d’URL (mapping) ---
+      // ========= 1) Paramètres d'URL =========
       const qp = new URLSearchParams(location.search);
       const f  = (qp.get("f")  || "").trim();   // prénom
       const l  = (qp.get("l")  || "").trim();   // nom
       const id = (qp.get("id") || "").trim();   // id vidéo (hex32)
       const d  = (qp.get("d")  || "").trim();   // date (optionnelle)
 
-      // --- vidéo ---
-      const BASE = document.body.dataset.accountBase?.replace(/\/+$/,"");
-      if (BASE && /^[a-f0-9]{32}$/i.test(id)) {
-        document.getElementById("player").src = `${BASE}/${id}/watch`;
+      // ========= 2) Initialisation Player (iframe CF + SDK) =========
+      const $iframe = document.getElementById("player");
+      if (!/^[a-f0-9]{32}$/i.test(id)) {
+        console.error("Cloudflare Stream ID invalide");
+        return;
+      }
+      // Utiliser l'iframe CF dédiée au Player API :
+      $iframe.src = `https://iframe.cloudflarestream.com/${id}`;
+      // NB: on n'utilise pas ici BASE/.../watch car il ne donne pas accès à l'API d'événements
+
+      // ========= 3) Tracking helper (envoi Apps Script) =========
+      const WEB_APP = "https://script.google.com/macros/s/AKfycbyFxJ2lUMtuB44kud-xGFcMGudW2J5G2UWMD2QtjvolJiUpRtA4zeX9e4_KieRIlzaF-g/exec";
+
+      function ping(event, extra) {
+        const payload = {
+          event,         // ex: opened, launched, pause, ended, progress_25, ...
+          f, l, id, d,
+          ua: navigator.userAgent,
+          ref: document.referrer || "",
+          w: String(window.innerWidth || 0),
+          h: String(window.innerHeight || 0),
+          ts: String(Date.now()),
+          ...extra       // ex: {currentTime, duration}
+        };
+
+        // sendBeacon (POST) -> fallback GET no-cors
+        try {
+          if (navigator.sendBeacon) {
+            const body = new URLSearchParams(payload);
+            const blob = new Blob([body.toString()], { type: "application/x-www-form-urlencoded" });
+            navigator.sendBeacon(WEB_APP, blob);
+            return;
+          }
+        } catch (_) {}
+        const qs = new URLSearchParams(payload).toString();
+        fetch(WEB_APP + "?" + qs, { method: "GET", mode: "no-cors", keepalive: true }).catch(()=>{});
       }
 
-      // --- tracking ouverture ---
-      const WEB_APP = "https://script.google.com/macros/s/AKfycbyFxJ2lUMtuB44kud-xGFcMGudW2J5G2UWMD2QtjvolJiUpRtA4zeX9e4_KieRIlzaF-g/exec";
-      const params = new URLSearchParams({
-        f, l, id, d,
-        ua: navigator.userAgent,
-        ref: document.referrer || "",
-        w: String(window.innerWidth || 0),
-        h: String(window.innerHeight || 0),
-        ts: String(Date.now()),
-        first: (function(){
-          const key = `aqi_opened_${id}_${d||"nodate"}`;
-          const first = !localStorage.getItem(key) ? 1 : 0;
-          try { localStorage.setItem(key,"1"); } catch(e){}
-          return String(first);
-        })()
-      });
+      // Événement "ouverture de page" (comme avant)
+      (function openedOnce(){
+        const key = `aqi_opened_${id}_${d||"nodate"}`;
+        const first = !localStorage.getItem(key);
+        try { localStorage.setItem(key, "1"); } catch(e){}
+        ping("opened", { first: first ? "1" : "0" });
+      })();
 
-      // 1) POST non bloquant (sendBeacon)
-      try {
-        if (navigator.sendBeacon) {
-          const body = new Blob([params.toString()], { type: "application/x-www-form-urlencoded" });
-          navigator.sendBeacon(WEB_APP, body);
+      // ========= 4) Abonnement aux events Player API =========
+      // On attend le SDK (chargé en defer) + l’iframe prête
+      function onReady(fn){ (document.readyState === "complete" ? fn : window.addEventListener("load", fn)); }
+      onReady(function(){
+        if (typeof Stream !== "function") {
+          console.error("SDK Cloudflare Stream non disponible");
           return;
         }
-      } catch (_) {}
+        const player = Stream($iframe);
 
-      // 2) Fallback GET fire-and-forget (pas de CORS requis)
-      fetch(WEB_APP + "?" + params.toString(), { method: "GET", mode: "no-cors", keepalive: true }).catch(()=>{});
+        // Dédup locale (par session d'onglet)
+        let launchedSent = false;
+        let q25 = false, q50 = false, q75 = false;
+        let duration = 0;
+
+        const getTimes = () => {
+          // La Player API expose généralement currentTime/duration via les propriétés du player
+          // (si non dispo immédiatement, on protège avec || 0)
+          const ct = Number(player.currentTime || 0);
+          const du = Number(player.duration   || duration || 0);
+          if (!duration && du) duration = du;
+          return { currentTime: String(ct|0), duration: String((du|0)) };
+        };
+
+        // Quand la durée devient connue
+        player.addEventListener("durationchange", () => {
+          const du = Number(player.duration || 0);
+          if (du > 0) duration = du;
+        });
+
+        // Premier démarrage effectif = "launched"
+        player.addEventListener("playing", () => {
+          if (!launchedSent) {
+            launchedSent = true;
+            ping("launched", getTimes());
+          }
+        });
+
+        // Pause / End
+        player.addEventListener("pause", () => {
+          ping("pause", getTimes());
+        });
+        player.addEventListener("ended", () => {
+          // on envoie aussi progress_100 par cohérence
+          if (duration) { q25 = q50 = q75 = true; }
+          ping("completed", getTimes());
+        });
+
+        // Progression (quartiles)
+        player.addEventListener("timeupdate", () => {
+          const ct = Number(player.currentTime || 0);
+          const du = Number(player.duration   || duration || 0);
+          if (!du || du < 4) return; // évite bruit sur très petites durées
+
+          const p = ct / du;
+          if (!q25 && p >= 0.25) { q25 = true; ping("progress_25", { currentTime: String(ct|0), duration: String(du|0) }); }
+          if (!q50 && p >= 0.50) { q50 = true; ping("progress_50", { currentTime: String(ct|0), duration: String(du|0) }); }
+          if (!q75 && p >= 0.75) { q75 = true; ping("progress_75", { currentTime: String(ct|0), duration: String(du|0) }); }
+        });
+
+        // (Optionnel) erreurs
+        player.addEventListener("error", (e) => {
+          ping("error", { message: (e && e.message) ? String(e.message) : "unknown" });
+        });
+      });
     })();
   </script>
 </body>
