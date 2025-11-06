@@ -1,108 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Regardez la Vidéo — Aqisio</title>
+  <!-- ===== Performance & base ===== -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LP — Vidéo Personnalisée</title>
+  <!-- Pré-connexion à l'iframe Cloudflare Stream (accélère la 1re requête) -->
+  <link rel="preconnect" href="https://iframe.videodelivery.net" crossorigin>
   <style>
-    :root { color-scheme: dark; }
-    html, body { height: 100%; margin: 0; background: #0b0b0b; color: #fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; display: grid; place-items: center; min-height: 100dvh; padding: 16px; }
-    .shell { width: clamp(320px, 92vw, 1280px); display: grid; gap: 16px; }
-    .frame { width: 100%; position: relative; padding-top: 56.25%; background: #000; border-radius: 12px; overflow: hidden; }
-    .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-    .cta-row { display: flex; justify-content: flex-end; position: sticky; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 10; }
-    .cta { display: inline-block; background: #006BFF; color: #fff; text-decoration: none; font-weight: 700; padding: 16px 24px; border-radius: 12px; transition: background 0.2s ease, transform 0.05s ease; box-shadow: 0 6px 14px rgba(0,0,0,.35); will-change: transform; font-size: 1rem; }
-    @media (min-width: 1024px){ .cta{ font-size: 1.5rem; padding: 24px 36px; border-radius: 16px; } }
-    .cta:hover { background: #0055cc; }
-    .cta:active{ transform: translateY(1px); }
-    .error { max-width: 680px; margin: 24px auto; padding: 20px; background: #2b1111; color: #ffd7d7; border-radius: 10px; font-size: 15px; line-height: 1.5; }
-    .overlay { position: fixed; inset: 0; display: none; background: rgba(0,0,0,.66); z-index: 1000; padding: 0; }
-    .overlay.open { display: block; }
-    .overlay-inner { width: 100%; height: 100vh; background: #fff; overflow: auto; }
-    .overlay-close { position: absolute; top: 12px; right: 12px; background: #006BFF; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-    .overlay-body .calendly-inline-widget { width: 100%; height: 100%; border: none; }
+    /* ===== Styles minimaux pour lisibilité ===== */
+    :root { --fg:#111; --muted:#666; --bg:#fff; --err:#b00020; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .wrap { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .meta, .debug { font-size: 14px; color: var(--muted); }
+    .video { margin: 16px 0; aspect-ratio: 16/9; background:#000; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+    .error { color: var(--err); font-weight: 600; margin-top: 12px; }
+    .kv { margin: 4px 0; }
+    .kv code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
+    .hidden { display:none; }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div id="root" class="frame"></div>
-    <div class="cta-row">
-      <a id="cta" href="#" class="cta" style="display:none;" aria-label="Réserver un rendez-vous">📞 Réservez un Rendez-Vous</a>
+  <div class="wrap">
+    <!-- ===== Titre : “qu’est-ce qui est quoi” ===== -->
+    <h1>LP — Vidéo personnalisée du prospect</h1>
+    <p class="meta">Cette page attend <code>f</code> (firstname), <code>l</code> (lastname), <code>id</code> (Cloudflare Stream video UID), <code>d</code> (date).</p>
+
+    <!-- ===== Zone d’infos lisibles humain ===== -->
+    <div id="info" class="debug">
+      <div class="kv">Prénom (<code>f</code>) : <strong id="fVal">—</strong></div>
+      <div class="kv">Nom (<code>l</code>) : <strong id="lVal">—</strong></div>
+      <div class="kv">Date (<code>d</code>) : <strong id="dVal">—</strong></div>
+      <div class="kv">ID vidéo Cloudflare (<code>id</code>) : <strong id="idVal">—</strong></div>
     </div>
+
+    <!-- ===== Emplacement vidéo ===== -->
+    <div id="videoBox" class="video hidden" aria-label="Lecteur vidéo Cloudflare Stream"></div>
+
+    <!-- ===== Erreurs lisibles ===== -->
+    <div id="errorBox" class="error hidden"></div>
+
+    <noscript>
+      <p class="error">JavaScript est requis pour charger la vidéo dynamique.</p>
+    </noscript>
   </div>
 
-  <div id="cal-overlay" class="overlay" role="dialog" aria-modal="true">
-    <div class="overlay-inner">
-      <button id="cal-close" class="overlay-close">Fermer</button>
-      <div id="cal-body" class="overlay-body"></div>
-    </div>
-  </div>
-
-  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
   <script>
+    // ===== 0) Utilitaires mini =====
     const qs = new URLSearchParams(location.search);
-    const f  = (qs.get('f')  || '').trim();
-    const l  = (qs.get('l')  || '').trim();
-    const id = (qs.get('id') || '').trim();
-    const fullName = [f, l].filter(Boolean).join(' ');
-    document.title = fullName ? `${fullName} - Regardez la Vidéo` : 'Regardez la Vidéo — Aqisio';
 
-    const ctaEl = document.getElementById('cta');
-    if (f) ctaEl.textContent = `📞 ${f}, Réservez un Rendez-Vous`;
-    ctaEl.style.display = 'inline-block';
+    // Récupération brute
+    const raw = {
+      f: qs.get('f') || '',
+      l: qs.get('l') || '',
+      id: qs.get('id') || '',
+      d: qs.get('d') || ''
+    };
 
-    const root = document.getElementById('root');
-    const overlay = document.getElementById('cal-overlay');
-    const closeBtn = document.getElementById('cal-close');
-    const calBody = document.getElementById('cal-body');
+    // Validation ultra-simple de l'ID Cloudflare Stream (ex: 32 hex comme "0bf4...fede")
+    // NB: adapte si tes IDs ont un autre format.
+    const idIsHex32 = /^[a-f0-9]{32}$/i.test(raw.id);
 
-    let calendlyLoaded = false;
+    // ===== 1) Affichage des valeurs (qu’est-ce qui est quoi) =====
+    const setText = (id, v) => document.getElementById(id).textContent = v || '—';
+    setText('fVal', raw.f);
+    setText('lVal', raw.l);
+    setText('dVal', raw.d);
+    setText('idVal', raw.id);
 
-    function ensureCalendlyLoaded(){
-      if (calendlyLoaded) return;
-      calBody.innerHTML = `<div class='calendly-inline-widget' data-url='https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1'></div>`;
-      const s = document.createElement('script');
-      s.src = 'https://assets.calendly.com/assets/external/widget.js';
-      s.async = true;
-      document.body.appendChild(s);
-      calendlyLoaded = true;
+    // ===== 2) Gestion d’erreurs =====
+    const errorBox = document.getElementById('errorBox');
+    const showError = (msg) => {
+      errorBox.textContent = msg;
+      errorBox.classList.remove('hidden');
+    };
+
+    if (!raw.id) {
+      showError('Paramètre manquant : id (l’UID de la vidéo Cloudflare Stream).');
+    } else if (!idIsHex32) {
+      showError('Paramètre id invalide : attendu 32 caractères hexadécimaux. Reçu: "' + raw.id + '"');
+    } else {
+      // ===== 3) Construction de l'iframe Stream =====
+      // Doc Cloudflare Stream : iframe publique => https://iframe.videodelivery.net/{VIDEO_UID}
+      // Options utiles : autoplay, muted, controls. (autoplay souvent nécessite muted)
+      const src = 'https://iframe.videodelivery.net/' + encodeURIComponent(raw.id) + '?autoplay=true&muted=true&controls=true';
+
+      const iframe = document.createElement('iframe');
+      iframe.setAttribute('allow', 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; clipboard-write');
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.src = src;
+
+      const box = document.getElementById('videoBox');
+      box.appendChild(iframe);
+      box.classList.remove('hidden');
     }
 
-    function openCalendly(){ ensureCalendlyLoaded(); overlay.classList.add('open'); }
-    function closeCalendly(){ overlay.classList.remove('open'); }
-
-    closeBtn.addEventListener('click', closeCalendly);
-    ctaEl.addEventListener('click', e => { e.preventDefault(); openCalendly(); });
-
-    if (!id) {
-      const err = document.createElement('div');
-      err.className = 'error';
-      err.innerHTML = `<strong>Erreur :</strong> aucun paramètre <code>id</code> trouvé dans l’URL.`;
-      document.querySelector('.shell').replaceWith(err);
-    } else {
-      const src = `https://iframe.videodelivery.net/${encodeURIComponent(id)}?controls=true&playsinline=true&defaultTextTrack=fr`;
-      const iframe = document.createElement('iframe');
-      iframe.id = 'stream-player';
-      iframe.src = src;
-      iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
-      iframe.allowFullscreen = true;
-      root.replaceChildren(iframe);
-
-      // Débogage pour vérifier les événements reçus
-      window.addEventListener('message', ev => {
-        try {
-          const host = ev.origin ? new URL(ev.origin).hostname : '';
-          if (host && !host.endsWith('videodelivery.net')) return;
-          let data = ev.data;
-          if (typeof data === 'string') { try { data = JSON.parse(data); } catch(_){} }
-          console.log('[Cloudflare Message]', data);
-          const evt = data && (data.event || (data.msg && data.msg.event));
-          if (evt === 'ended') {
-            console.log('Événement ended détecté — ouverture Calendly');
-            openCalendly();
-          }
-        } catch (_) {}
-      });
+    // ===== 4) (Optionnel) Mise à jour du <title> pour le confort / debug =====
+    if (raw.f || raw.l) {
+      document.title = 'Vidéo pour ' + [raw.f, raw.l].filter(Boolean).join(' ');
     }
   </script>
 </body>
