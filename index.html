@@ -18,12 +18,14 @@
       padding: 16px;
     }
 
+    /* Conteneur principal de la page */
     .shell{
       width: clamp(320px, 92vw, 1280px);
       display: grid;
       gap: 16px;
     }
 
+    /* Zone qui contient la vidéo */
     .frame {
       width: 100%;
       position: relative;
@@ -40,6 +42,7 @@
       border: 0;
     }
 
+    /* Bouton CTA aligné en bas à droite */
     .cta-row{
       display: flex;
       justify-content: flex-end;
@@ -60,12 +63,11 @@
       will-change: transform;
       font-size: 1rem;
     }
-    @media (min-width: 1024px){
-      .cta{ font-size: 1.5rem; padding: 24px 36px; border-radius: 16px; }
-    }
+    @media (min-width: 1024px){ .cta{ font-size: 1.5rem; padding: 24px 36px; border-radius: 16px; } }
     .cta:hover { background: #0055cc; }
     .cta:active{ transform: translateY(1px); }
 
+    /* Message d’erreur si aucun ID vidéo */
     .error {
       max-width: 680px;
       margin: 24px auto;
@@ -76,14 +78,13 @@
       font-size: 15px;
       line-height: 1.5;
     }
-    code { color: #ffb4b4; }
 
+    /* Fenêtre Calendly plein écran */
     .overlay{ position: fixed; inset: 0; display: none; background: rgba(0,0,0,.66); z-index: 1000; padding: min(4vw,24px); }
     .overlay.open{ display: block; }
     .overlay-inner{ width: clamp(320px, 92vw, 1280px); height: min(92vh, 760px); margin: 0 auto; background:#0b0b0b; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); border: 1px solid #1e1e1e; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
     .overlay-header{ display:none; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #1f2530; background:#0e1116; }
     .overlay.closable .overlay-header{ display:flex; }
-    .overlay-title{ font-weight:700; font-size: 15px; }
     .overlay-close{ appearance:none; border:0; background:#1a1f2a; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
     .overlay-body{ position:relative; }
     .overlay-body .calendly-inline-widget{ position:absolute; inset:0; min-width:320px; height:100%; }
@@ -97,10 +98,9 @@
     </div>
   </div>
 
-  <div id="cal-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="cal-title">
+  <div id="cal-overlay" class="overlay" role="dialog" aria-modal="true">
     <div class="overlay-inner">
       <div class="overlay-header">
-        <div id="cal-title" class="overlay-title">Planifier un rendez-vous</div>
         <button id="cal-close" class="overlay-close" type="button">Fermer</button>
       </div>
       <div id="cal-body" class="overlay-body"></div>
@@ -109,24 +109,30 @@
 
   <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
   <script>
+    // Lecture des paramètres URL (prénom, nom, id vidéo)
     const qs = new URLSearchParams(location.search);
     const f  = (qs.get('f')  || '').trim();
     const l  = (qs.get('l')  || '').trim();
     const id = (qs.get('id') || '').trim();
 
+    // Titre de la page
     const fullName = [f, l].filter(Boolean).join(' ');
     document.title = fullName ? `${fullName} - Regardez la Vidéo` : 'Regardez la Vidéo — Aqisio';
 
+    // Bouton CTA dynamique
     const ctaEl = document.getElementById('cta');
     if (f) ctaEl.textContent = `📞 ${f}, Réservez un Rendez-Vous`;
     ctaEl.style.display = 'inline-block';
 
+    // Élément vidéo + overlay Calendly
     const root = document.getElementById('root');
-    const overlay   = document.getElementById('cal-overlay');
-    const closeBtn  = document.getElementById('cal-close');
-    const calBody   = document.getElementById('cal-body');
+    const overlay = document.getElementById('cal-overlay');
+    const closeBtn = document.getElementById('cal-close');
+    const calBody = document.getElementById('cal-body');
+
     let calendlyLoaded = false;
 
+    // Charge Calendly une seule fois
     function ensureCalendlyLoaded(){
       if (calendlyLoaded) return;
       calBody.innerHTML = `<div class="calendly-inline-widget" data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1" style="min-width:320px;height:100%;"></div>`;
@@ -137,45 +143,40 @@
       calendlyLoaded = true;
     }
 
-    function openCalendly(mode){
-      ensureCalendlyLoaded();
-      if (mode === 'cta') overlay.classList.add('closable');
-      else overlay.classList.remove('closable');
-      overlay.classList.add('open');
-    }
+    // Ouvre / ferme le Calendly
+    function openCalendly(){ ensureCalendlyLoaded(); overlay.classList.add('open'); }
     function closeCalendly(){ overlay.classList.remove('open'); }
 
     closeBtn.addEventListener('click', closeCalendly);
-    ctaEl.addEventListener('click', (e)=>{ e.preventDefault(); openCalendly('cta'); });
+    ctaEl.addEventListener('click', (e)=>{ e.preventDefault(); openCalendly(); });
 
+    // Si pas d'ID vidéo → message d'erreur
     if (!id) {
       const err = document.createElement('div');
       err.className = 'error';
       err.innerHTML = `<strong>Erreur :</strong> aucun paramètre <code>id</code> trouvé dans l’URL.`;
       document.querySelector('.shell').replaceWith(err);
     } else {
-      // Utilise par défaut videodelivery.net (fiable, pas de 404)
+      // Crée le lecteur vidéo Cloudflare Stream
       const src = `https://iframe.videodelivery.net/${encodeURIComponent(id)}?controls=true&playsinline=true&defaultTextTrack=fr`;
-
       const iframe = document.createElement('iframe');
       iframe.id = 'stream-player';
       iframe.src = src;
       iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
       iframe.allowFullscreen = true;
-      iframe.title = 'Lecteur vidéo Cloudflare Stream';
       root.replaceChildren(iframe);
 
-      if (typeof window.Stream === 'function') {
-        const player = Stream(iframe);
-        player.addEventListener('ended', () => { openCalendly('ended'); });
-        player.addEventListener('timeupdate', () => {
-          try{
-            const dur = player.duration || 0;
-            const cur = player.currentTime || 0;
-            if (dur > 0 && cur / dur >= 0.995) openCalendly('ended');
-          }catch(_){ }
-        });
-      }
+      // Ouvre Calendly automatiquement quand la vidéo se termine
+      window.addEventListener('message', (ev)=>{
+        try{
+          const host = ev.origin ? new URL(ev.origin).hostname : '';
+          if (host && !host.endsWith('videodelivery.net')) return;
+          let data = ev.data;
+          if (typeof data === 'string') { try { data = JSON.parse(data); } catch(_){} }
+          const evt = data && (data.event || (data.msg && data.msg.event));
+          if (evt === 'ended') openCalendly();
+        }catch(_){ }
+      });
     }
   </script>
 </body>
