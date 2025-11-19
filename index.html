@@ -1,185 +1,309 @@
 <!doctype html>
 <html lang="fr">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vidéo</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vidéo</title>
 
-  <!-- PERF PRIORITÉ VIDÉO : rien de bloquant, tout en async/defer -->
-  <!-- Cloudflare Stream: réchauffage -->
-  <link rel="dns-prefetch" href="https://iframe.cloudflarestream.com">
-  <link rel="preconnect" href="https://iframe.cloudflarestream.com" crossorigin>
-  <link rel="dns-prefetch" href="https://embed.cloudflarestream.com">
-  <link rel="preconnect" href="https://embed.cloudflarestream.com" crossorigin>
+    <!-- PERF PRIORITÉ VIDÉO : rien de bloquant, tout en async/defer -->
+    <!-- Cloudflare Stream: réchauffage -->
+    <link rel="dns-prefetch" href="https://iframe.cloudflarestream.com">
+    <link rel="preconnect" href="https://iframe.cloudflarestream.com" crossorigin>
+    <link rel="dns-prefetch" href="https://embed.cloudflarestream.com">
+    <link rel="preconnect" href="https://embed.cloudflarestream.com" crossorigin>
 
-  <!-- Calendly: réchauffage + préchargement du script (puis async) -->
-  <link rel="dns-prefetch" href="https://assets.calendly.com">
-  <link rel="preconnect" href="https://assets.calendly.com" crossorigin>
-  <link rel="dns-prefetch" href="https://calendly.com">
-  <link rel="preconnect" href="https://calendly.com" crossorigin>
-  <link rel="preload" as="script" href="https://assets.calendly.com/assets/external/widget.js">
+    <!-- Calendly: réchauffage + préchargement du script (puis async) -->
+    <link rel="dns-prefetch" href="https://assets.calendly.com">
+    <link rel="preconnect" href="https://assets.calendly.com" crossorigin>
+    <link rel="dns-prefetch" href="https://calendly.com">
+    <link rel="preconnect" href="https://calendly.com" crossorigin>
+    <link rel="preload" as="script" href="https://assets.calendly.com/assets/external/widget.js">
 
-  <style>
-    :root { --gap: clamp(12px, 3vw, 32px); }
-    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+    <style>
+        :root {
+            --gap: clamp(12px, 3vw, 32px);
+        }
 
-    /* scène centrée avec marge respirante */
-    .stage { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; padding: var(--gap); box-sizing: border-box; background:#000; }
-    .frame { width: clamp(320px, 88vw, 1100px); aspect-ratio: 16 / 9; max-height: 68vh; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.35); background:#000; }
-    @media (max-width: 640px) { .frame { width: 96vw; max-height: 58vh; } }
-    #player { width: 100%; height: 100%; border: 0; object-fit: cover; background:#000; }
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
 
-    /* CTA */
-    .cta {
-      position: fixed; right: var(--gap); bottom: var(--gap); z-index: 30;
-      background:#006BFF; color:#fff; border:0; border-radius:16px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      font-weight: 700; letter-spacing:.2px; padding: 14px 16px; font-size: 14px; line-height: 1.1;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35); cursor:pointer; user-select:none; -webkit-tap-highlight-color: transparent;
-    }
-    .cta:active { transform: translateY(1px); }
-    @media (min-width: 1024px) { .cta { padding: 22px 26px; font-size: 18px; border-radius:20px; } }
+        /* scène centrée avec marge respirante */
+        .stage {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--gap);
+            box-sizing: border-box;
+            background: #000;
+        }
 
-    /* Modal Calendly (pré-initialisé mais caché → prêt instantanément au clic/fin vidéo) */
-    .modal { position:fixed; inset:0; z-index:50; display:none; background:rgba(0,0,0,.65); backdrop-filter:blur(2px); }
-    .modal__panel { position:absolute; inset: var(--gap); background:#fff; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; box-shadow: 0 20px 60px rgba(0,0,0,.45); }
-    .modal__head { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#0b1220; color:#fff; font:600 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
-    .modal__close { appearance:none; border:0; background:transparent; color:#fff; cursor:pointer; font-size:18px; padding:6px; line-height:1; }
-    .modal__body { flex:1; min-height:420px; background:#fff; }
-    .calendly-inline-widget { width:100%; height:100%; min-width:320px; }
-  </style>
+        .frame {
+            width: clamp(320px, 88vw, 1100px);
+            aspect-ratio: 16 / 9;
+            max-height: 68vh;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
+            background: #000;
+        }
 
-  <!-- CF Player SDK (defer = non bloquant) -->
-  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js?v=3" defer></script>
-  <!-- Calendly (le script a été preloaded ; async = non bloquant) -->
-  <script src="https://assets.calendly.com/assets/external/widget.js" async></script>
+        @media (max-width: 640px) {
+            .frame {
+                width: 96vw;
+                max-height: 58vh;
+            }
+        }
+
+        #player {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            object-fit: cover;
+            background: #000;
+        }
+
+        /* CTA */
+        .cta {
+            position: fixed;
+            right: var(--gap);
+            bottom: var(--gap);
+            z-index: 30;
+            background: #006BFF;
+            color: #fff;
+            border: 0;
+            border-radius: 16px;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            font-weight: 700;
+            letter-spacing: .2px;
+            padding: 14px 16px;
+            font-size: 14px;
+            line-height: 1.1;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .cta:active {
+            transform: translateY(1px);
+        }
+
+        @media (min-width: 1024px) {
+            .cta {
+                padding: 22px 26px;
+                font-size: 18px;
+                border-radius: 20px;
+            }
+        }
+
+        /* Modal Calendly (pré-initialisé mais caché → prêt instantanément au clic/fin vidéo) */
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            background: rgba(0, 0, 0, .65);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal__panel {
+            position: absolute;
+            inset: var(--gap);
+            background: #fff;
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+        }
+
+        .modal__head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: #0b1220;
+            color: #fff;
+            font: 600 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        .modal__close {
+            appearance: none;
+            border: 0;
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 6px;
+            line-height: 1;
+        }
+
+        .modal__body {
+            flex: 1;
+            min-height: 420px;
+            background: #fff;
+        }
+
+        .calendly-inline-widget {
+            width: 100%;
+            height: 100%;
+            min-width: 320px;
+        }
+    </style>
+
+    <!-- CF Player SDK (defer = non bloquant) -->
+    <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js?v=3" defer></script>
+    <!-- Calendly (le script a été preloaded ; async = non bloquant) -->
+    <script src="https://assets.calendly.com/assets/external/widget.js" async></script>
 </head>
+
 <body>
-  <!-- Vidéo -->
-  <div class="stage">
-    <div class="frame">
-      <iframe id="player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="eager"></iframe>
-    </div>
-  </div>
-
-  <!-- CTA -->
-  <button id="cta" class="cta">📞 Réservez un Rendez-Vous !</button>
-
-  <!-- Modal Calendly (caché mais présent → prêt dès que le script charge) -->
-  <div id="cal-modal" class="modal" aria-hidden="true">
-    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Réserver un rendez-vous">
-      <div class="modal__head">
-        <span id="modal-title">Réserver un rendez-vous</span>
-        <button class="modal__close" id="cal-close" aria-label="Fermer">✕</button>
-      </div>
-      <div class="modal__body">
-        <div class="calendly-inline-widget"
-             data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1">
+    <!-- Vidéo -->
+    <div class="stage">
+        <div class="frame">
+            <iframe id="player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen
+                loading="eager"></iframe>
         </div>
-      </div>
     </div>
-  </div>
 
-  <script>
-    (function () {
-      "use strict";
+    <!-- CTA -->
+    <button id="cta" class="cta">📞 Réservez un Rendez-Vous !</button>
 
-      /* ============================
-       * 1) PARAMS & PERSONNALISATION
-       * ============================ */
-      const qp = new URLSearchParams(location.search);
-      const f  = (qp.get("f")  || "").trim();
-      const l  = (qp.get("l")  || "").trim();
-      const id = (qp.get("id") || "").trim();
-      const d  = (qp.get("d")  || "").trim();
-      if (!/^[a-f0-9]{32}$/i.test(id)) { console.error("Stream ID invalide"); return; }
+    <!-- Modal Calendly (caché mais présent → prêt dès que le script charge) -->
+    <div id="cal-modal" class="modal" aria-hidden="true">
+        <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Réserver un rendez-vous">
+            <div class="modal__head">
+                <span id="modal-title">Réserver un rendez-vous</span>
+                <button class="modal__close" id="cal-close" aria-label="Fermer">✕</button>
+            </div>
+            <div class="modal__body">
+                <div class="calendly-inline-widget"
+                    data-url="https://calendly.com/aqisio/presentation?hide_event_type_details=1&hide_gdpr_banner=1">
+                </div>
+            </div>
+        </div>
+    </div>
 
-      const prettyF = f || "Vous";
-      document.title = `${prettyF}, regardez la vidéo !`;
-      const cta = document.getElementById("cta");
-      cta.textContent = `📞 ${prettyF}, Réservez un Rendez-Vous !`;
+    <script>
+        (function () {
+            "use strict";
 
-      /* ============================
-       * 2) SESSION & PLAYER
-       * ============================ */
-      const sessionId = (self.crypto && crypto.randomUUID)
-        ? `sid_${id.slice(0,8)}_${crypto.randomUUID().slice(0,8)}`
-        : `sid_${id.slice(0,8)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
+            /* ============================
+             * 1) PARAMS & PERSONNALISATION
+             * ============================ */
+            const qp = new URLSearchParams(location.search);
+            const f = (qp.get("f") || "").trim();
+            const l = (qp.get("l") || "").trim();
+            const id = (qp.get("id") || "").trim();
+            const d = (qp.get("d") || "").trim();
+            if (!/^[a-f0-9]{32}$/i.test(id)) { console.error("Stream ID invalide"); return; }
 
-      const iframe = document.getElementById("player");
-      // Player API (pas /watch) — priorité perf: l’iframe se charge tout de suite
-      // Sous-titres fr par défaut via paramètre d'URL (BCP47: 'fr')
-      iframe.src = `https://iframe.cloudflarestream.com/${id}?v=3&defaultTextTrack=fr`;
+            const prettyF = f || "Vous";
+            document.title = `${prettyF}, regardez la vidéo !`;
+            const cta = document.getElementById("cta");
+            cta.textContent = `📞 ${prettyF}, Réservez un Rendez-Vous !`;
 
-      /* ============================
-       * 3) TRACKING helper (non bloquant)
-       * ============================ */
-      const WEB_APP = "https://script.google.com/macros/s/AKfycbyFxJ2lUMtuB44kud-xGFcMGudW2J5G2UWMD2QtjvolJiUpRtA4zeX9e4_KieRIlzaF-g/exec";
-      function ping(ev, extra) {
-        const base = { ev, f, l, id, d, sessionId, ua:navigator.userAgent, ref:document.referrer||"", w:String(innerWidth||0), h:String(innerHeight||0), ts:String(Date.now()) };
-        const payload = new URLSearchParams(Object.assign(base, extra||{}));
-        try {
-          if (navigator.sendBeacon) {
-            const blob = new Blob([payload.toString()], { type:"application/x-www-form-urlencoded" });
-            navigator.sendBeacon(WEB_APP, blob); return;
-          }
-        } catch(_) {}
-        fetch(WEB_APP + "?" + payload.toString(), { method:"GET", mode:"no-cors", keepalive:true }).catch(()=>{});
-      }
-      (function openedOnce(){
-        const key = `aqi_opened_${id}_${d||"nodate"}`;
-        const first = !localStorage.getItem(key);
-        try { localStorage.setItem(key,"1"); } catch(e){}
-        ping("opened", { first: first ? "1" : "0", cur:"0", dur:"0" });
-      })();
+            /* ============================
+             * 2) SESSION & PLAYER
+             * ============================ */
+            const sessionId = (self.crypto && crypto.randomUUID)
+                ? `sid_${id.slice(0, 8)}_${crypto.randomUUID().slice(0, 8)}`
+                : `sid_${id.slice(0, 8)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
-      /* ============================
-       * 4) CALENDLY MODAL (pré-initialisé, réouvrable)
-       * ============================ */
-      const modal = document.getElementById("cal-modal");
-      const closeBtn = document.getElementById("cal-close");
-      function showCalendly(){ modal.style.display="block"; modal.setAttribute("aria-hidden","false"); ping("calendly_open"); }
-      function hideCalendly(){ modal.style.display="none"; modal.setAttribute("aria-hidden","true"); }
-      cta.addEventListener("click", ()=>{ ping("cta_click"); showCalendly(); });
-      closeBtn.addEventListener("click", hideCalendly);
-      modal.addEventListener("click", (e)=>{ if(e.target === modal) hideCalendly(); });
-      addEventListener("keydown", (e)=>{ if(e.key==="Escape") hideCalendly(); });
+            const iframe = document.getElementById("player");
+            // Player API (pas /watch) — priorité perf: l’iframe se charge tout de suite
+            // Sous-titres fr par défaut via paramètre d'URL (BCP47: 'fr')
+            iframe.src = `https://iframe.cloudflarestream.com/${id}?v=3&defaultTextTrack=fr`;
 
-      /* ============================
-       * 5) PLAYER + TRACKING 1s
-       * ============================ */
-      function onReady(cb){ (document.readyState === "complete" ? cb : addEventListener("load", cb)); }
-      onReady(function(){
-        if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
-        const player = Stream(iframe);
+            /* ============================
+             * 3) TRACKING helper (non bloquant)
+             * ============================ */
+            // MODIFICATION: On pointe vers notre API locale au lieu de Google Apps Script
+            const WEB_APP = "/api/track";
 
-        // --- Tracking à la seconde (client-side) ---
-        let duration = 0, launched = false;
-        const sentSeconds = new Set();
-        let tick = null;
-        const getTimes = () => {
-          const ct = Math.max(0, Math.floor(Number(player.currentTime || 0)));
-          const du = Math.max(0, Math.floor(Number(player.duration   || duration || 0)));
-          if (!duration && du) duration = du;
-          return { cur:String(ct), dur:String(du) };
-        };
-        function startTick(){ if (!tick) tick = setInterval(()=>{ const t=getTimes(); const s=+t.cur; if(!sentSeconds.has(s)){ sentSeconds.add(s); ping("sec",t);} },1000); }
-        function stopTick(){ if (tick){ clearInterval(tick); tick=null; } }
+            function ping(ev, extra) {
+                const base = { ev, f, l, id, d, sessionId, ua: navigator.userAgent, ref: document.referrer || "", w: String(innerWidth || 0), h: String(innerHeight || 0), ts: String(Date.now()) };
+                const payload = new URLSearchParams(Object.assign(base, extra || {}));
 
-        player.addEventListener("durationchange", ()=>{ const du=Math.floor(Number(player.duration||0)); if(du>0) duration=du; });
-        player.addEventListener("playing", ()=>{ if(!launched){ launched=true; ping("launched", getTimes()); } startTick(); });
-        player.addEventListener("pause",   ()=>{ ping("pause", getTimes()); stopTick(); });
-        player.addEventListener("ended",   ()=>{ const t=getTimes(); const s=+t.cur; if(!sentSeconds.has(s)){ sentSeconds.add(s); ping("sec",t);} ping("completed", t); stopTick(); showCalendly(); });
+                // On utilise sendBeacon si possible, sinon fetch
+                try {
+                    if (navigator.sendBeacon) {
+                        // Pour sendBeacon vers une API locale, FormData est souvent mieux supporté ou URLSearchParams
+                        navigator.sendBeacon(WEB_APP, payload); return;
+                    }
+                } catch (_) { }
 
-        // Seek (optionnel)
-        let from=0; player.addEventListener("seeking", ()=>{ from=+getTimes().cur; });
-        player.addEventListener("seeked",  ()=>{ const t=getTimes(); ping("seek", Object.assign({}, t, { from:String(from), to:t.cur })); });
+                // Fallback fetch
+                fetch(WEB_APP, {
+                    method: "POST",
+                    body: payload,
+                    keepalive: true
+                }).catch(() => { });
+            }
 
-        // Sauvegarde dernier point si fermeture
-        addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="hidden") ping("hidden", getTimes()); });
-        addEventListener("pagehide", ()=>{ ping("pagehide", getTimes()); });
-      });
-    })();
-  </script>
+            (function openedOnce() {
+                const key = `aqi_opened_${id}_${d || "nodate"}`;
+                const first = !localStorage.getItem(key);
+                try { localStorage.setItem(key, "1"); } catch (e) { }
+                ping("opened", { first: first ? "1" : "0", cur: "0", dur: "0" });
+            })();
+
+            /* ============================
+             * 4) CALENDLY MODAL (pré-initialisé, réouvrable)
+             * ============================ */
+            const modal = document.getElementById("cal-modal");
+            const closeBtn = document.getElementById("cal-close");
+            function showCalendly() { modal.style.display = "block"; modal.setAttribute("aria-hidden", "false"); ping("calendly_open"); }
+            function hideCalendly() { modal.style.display = "none"; modal.setAttribute("aria-hidden", "true"); }
+            cta.addEventListener("click", () => { ping("cta_click"); showCalendly(); });
+            closeBtn.addEventListener("click", hideCalendly);
+            modal.addEventListener("click", (e) => { if (e.target === modal) hideCalendly(); });
+            addEventListener("keydown", (e) => { if (e.key === "Escape") hideCalendly(); });
+
+            /* ============================
+             * 5) PLAYER + TRACKING 1s
+             * ============================ */
+            function onReady(cb) { (document.readyState === "complete" ? cb : addEventListener("load", cb)); }
+            onReady(function () {
+                if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
+                const player = Stream(iframe);
+
+                // --- Tracking à la seconde (client-side) ---
+                let duration = 0, launched = false;
+                const sentSeconds = new Set();
+                let tick = null;
+                const getTimes = () => {
+                    const ct = Math.max(0, Math.floor(Number(player.currentTime || 0)));
+                    const du = Math.max(0, Math.floor(Number(player.duration || duration || 0)));
+                    if (!duration && du) duration = du;
+                    return { cur: String(ct), dur: String(du) };
+                };
+                function startTick() { if (!tick) tick = setInterval(() => { const t = getTimes(); const s = +t.cur; if (!sentSeconds.has(s)) { sentSeconds.add(s); ping("sec", t); } }, 1000); }
+                function stopTick() { if (tick) { clearInterval(tick); tick = null; } }
+
+                player.addEventListener("durationchange", () => { const du = Math.floor(Number(player.duration || 0)); if (du > 0) duration = du; });
+                player.addEventListener("playing", () => { if (!launched) { launched = true; ping("launched", getTimes()); } startTick(); });
+                player.addEventListener("pause", () => { ping("pause", getTimes()); stopTick(); });
+                player.addEventListener("ended", () => { const t = getTimes(); const s = +t.cur; if (!sentSeconds.has(s)) { sentSeconds.add(s); ping("sec", t); } ping("completed", t); stopTick(); showCalendly(); });
+
+                // Seek (optionnel)
+                let from = 0; player.addEventListener("seeking", () => { from = +getTimes().cur; });
+                player.addEventListener("seeked", () => { const t = getTimes(); ping("seek", Object.assign({}, t, { from: String(from), to: t.cur })); });
+
+                // Sauvegarde dernier point si fermeture
+                addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") ping("hidden", getTimes()); });
+                addEventListener("pagehide", () => { ping("pagehide", getTimes()); });
+            });
+        })();
+    </script>
 </body>
+
 </html>
