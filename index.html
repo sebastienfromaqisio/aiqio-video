@@ -254,7 +254,7 @@
       const closeBtn = document.getElementById("cal-close");
       function showCalendly() { modal.style.display = "block"; modal.setAttribute("aria-hidden", "false"); ping("calendly_open"); }
       function hideCalendly() { modal.style.display = "none"; modal.setAttribute("aria-hidden", "true"); }
-      cta.addEventListener("click", () => { ping("cta_click"); showCalendly(); });
+      cta.addEventListener("click", () => { ping("cta_click_manual"); showCalendly(); });
       closeBtn.addEventListener("click", hideCalendly);
       modal.addEventListener("click", (e) => { if (e.target === modal) hideCalendly(); });
       addEventListener("keydown", (e) => { if (e.key === "Escape") hideCalendly(); });
@@ -292,6 +292,7 @@
 
         player.addEventListener('ended', () => {
           showCalendly(); // Open Calendly immediately
+          ping('calendly_auto_open'); // Track automatic opening
           player.currentTime.then(t => ping('completed', { time: Math.round(t) })).catch(() => { });
         });
 
