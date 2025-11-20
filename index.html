@@ -291,7 +291,7 @@
         });
 
         player.addEventListener('ended', () => {
-          ping('completed');
+          player.currentTime.then(t => ping('completed', { time: Math.round(t) }));
           showCalendly(); // Keep showing Calendly on video end
         });
 
