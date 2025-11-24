@@ -223,23 +223,24 @@
       iframe.src = `https://iframe.cloudflarestream.com/${id}?v=3&defaultTextTrack=fr`;
 
       /* ============================
-       * 3) TRACKING helper (non bloquant)
+       * 3) TRACKING helper (ROBUSTE)
        * ============================ */
-      // MODIFICATION: On pointe vers l'API du SaaS (app.aqisio.com)
-      // Remplacez par l'URL de votre SaaS si différente
       const WEB_APP = "https://app.aqisio.com/api/track";
 
       function ping(ev, extra) {
         const base = { ev, f, l, id, d, sessionId, ua: navigator.userAgent, ref: document.referrer || "", w: String(innerWidth || 0), h: String(innerHeight || 0), ts: String(Date.now()) };
         const payload = new URLSearchParams(Object.assign(base, extra || {}));
-        try {
-          if (navigator.sendBeacon) {
-            const blob = new Blob([payload.toString()], { type: "application/x-www-form-urlencoded" });
-            navigator.sendBeacon(WEB_APP, blob); return;
-          }
-        } catch (_) { }
-        fetch(WEB_APP + "?" + payload.toString(), { method: "GET", mode: "no-cors", keepalive: true }).catch(() => { });
+
+        // Priorité absolue à sendBeacon pour les événements critiques (fermeture, pause, suspend)
+        if (navigator.sendBeacon && (ev === 'pagehide' || ev === 'suspend' || ev === 'pause' || ev === 'completed')) {
+          const blob = new Blob([payload.toString()], { type: "application/x-www-form-urlencoded" });
+          navigator.sendBeacon(WEB_APP, blob);
+        } else {
+          // Fetch avec keepalive pour le reste
+          fetch(WEB_APP + "?" + payload.toString(), { method: "GET", mode: "no-cors", keepalive: true }).catch(() => { });
+        }
       }
+
       (function openedOnce() {
         const key = `aqi_opened_${id}_${d || "nodate"}`;
         const first = !localStorage.getItem(key);
@@ -248,7 +249,7 @@
       })();
 
       /* ============================
-       * 4) CALENDLY MODAL (pré-initialisé, réouvrable)
+       * 4) CALENDLY MODAL
        * ============================ */
       const modal = document.getElementById("cal-modal");
       const closeBtn = document.getElementById("cal-close");
@@ -260,39 +261,58 @@
       addEventListener("keydown", (e) => { if (e.key === "Escape") hideCalendly(); });
 
       /* ============================
-       * 5) PLAYER + TRACKING 1s
+       * 5) PLAYER + TRACKING AVANCÉ
        * ============================ */
       function onReady(cb) { (document.readyState === "complete" ? cb : addEventListener("load", cb)); }
       onReady(function () {
         if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
         const player = Stream(iframe);
 
-        // --- Tracking à la seconde (client-side) ---
-        let duration = 0, launched = false;
-        const sentSeconds = new Set();
-        let tick = null;
-        const getTimes = () => {
-          const ct = Math.max(0, Math.floor(Number(player.currentTime || 0)));
-          const du = Math.max(0, Math.floor(Number(player.duration || duration || 0)));
-          if (!duration && du) duration = du;
-          return { cur: String(ct), dur: String(du) };
-        };
-        function startTick() { if (!tick) tick = setInterval(() => { const t = getTimes(); const s = +t.cur; if (!sentSeconds.has(s)) { sentSeconds.add(s); ping("sec", t); } }, 1000); }
-        function stopTick() { if (tick) { clearInterval(tick); tick = null; } }
+        // --- Heartbeat & Time Tracking ---
+        let heartbeatInterval = null;
 
-        // 4) Événements Player
+        function sendHeartbeat() {
+          player.currentTime.then(t => {
+            ping('playing', { time: Math.round(t) });
+          });
+        }
+
+        function startHeartbeat() {
+          if (!heartbeatInterval) {
+            // Ping toutes les 5 secondes pour être sûr d'avoir la position
+            heartbeatInterval = setInterval(sendHeartbeat, 5000);
+          }
+        }
+
+        function stopHeartbeat() {
+          if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+          }
+        }
+
+        // --- Event Listeners ---
 
         player.addEventListener('play', () => {
           ping('launched');
+          startHeartbeat();
         });
 
         player.addEventListener('pause', () => {
+          stopHeartbeat();
           player.currentTime.then(t => ping('pause', { time: Math.round(t) }));
+
+          // --- AUTO-RESUME (Tentative de maintien de lecture) ---
+          if (document.hidden) {
+            console.log("Tentative de reprise automatique en arrière-plan...");
+            player.play().catch(e => console.log("Echec auto-resume:", e));
+          }
         });
 
         player.addEventListener('ended', () => {
-          showCalendly(); // Open Calendly immediately
-          ping('calendly_auto_open'); // Track automatic opening
+          stopHeartbeat();
+          showCalendly();
+          ping('calendly_auto_open');
           player.currentTime.then(t => ping('completed', { time: Math.round(t) })).catch(() => { });
         });
 
@@ -300,14 +320,14 @@
           player.currentTime.then(t => ping('seek', { time: Math.round(t) }));
         });
 
-        // Tracking de progression (toutes les 5 secondes)
+        // Tracking de progression (toutes les 5 secondes) - Gardé pour la compatibilité
         let lastPct = 0;
         player.addEventListener('timeupdate', () => {
           player.currentTime.then(t => {
             player.duration.then(d => {
               if (d > 0) {
                 const pct = Math.round((t / d) * 100);
-                if (pct > lastPct + 5) { // On log tous les 5%
+                if (pct > lastPct + 5) {
                   lastPct = pct;
                   ping('progress', { pct: pct, time: Math.round(t) });
                 }
@@ -316,20 +336,23 @@
           });
         });
 
-        // 5) Tracking Focus / Perte de Focus
+        // --- Gestion Visibilité & Fermeture (CRITIQUE) ---
+
         document.addEventListener("visibilitychange", () => {
           player.currentTime.then(t => {
             if (document.visibilityState === 'visible') {
               ping('focus_gained', { time: Math.round(t) });
+              // Si on revient et que c'était censé jouer, on s'assure que ça joue
+              // (Optionnel, peut être intrusif, on laisse l'utilisateur relancer si besoin)
             } else {
-              ping('focus_lost', { time: Math.round(t) });
+              // L'utilisateur quitte/cache l'onglet : ON SAUVEGARDE IMMÉDIATEMENT
+              ping('suspend', { time: Math.round(t) });
             }
           });
         });
 
         addEventListener("pagehide", () => {
-          // pagehide doit être rapide, on ne peut pas attendre la promise de currentTime parfois
-          // On essaie quand même, ou on utilise la dernière valeur connue si on l'avait stockée
+          // Dernier espoir de sauvegarde
           player.currentTime.then(t => ping("pagehide", { time: Math.round(t) })).catch(() => ping("pagehide"));
         });
       });
