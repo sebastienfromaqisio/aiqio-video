@@ -268,27 +268,32 @@
         if (typeof Stream !== "function") { console.error("SDK Stream indisponible"); return; }
         const player = Stream(iframe);
 
+        // --- Helper pour compatibilité API (Propriété vs Promise) ---
+        // La doc dit que currentTime est un nombre, mais certaines versions du SDK agissent comme des Promises.
+        // On normalise tout ça.
+        const getTime = () => Promise.resolve(player.currentTime).catch(() => 0);
+        const getDur = () => Promise.resolve(player.duration).catch(() => 0);
+
         // --- Heartbeat & Time Tracking ---
         let heartbeatInterval = null;
-
+        
         function sendHeartbeat() {
-          player.currentTime.then(t => {
-            ping('playing', { time: Math.round(t) });
-          });
+            getTime().then(t => {
+                ping('playing', { time: Math.round(t) });
+            });
         }
 
         function startHeartbeat() {
-          if (!heartbeatInterval) {
-            // Ping toutes les 5 secondes pour être sûr d'avoir la position
-            heartbeatInterval = setInterval(sendHeartbeat, 5000);
-          }
+            if (!heartbeatInterval) {
+                heartbeatInterval = setInterval(sendHeartbeat, 5000);
+            }
         }
 
         function stopHeartbeat() {
-          if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
-            heartbeatInterval = null;
-          }
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
         }
 
         // --- Event Listeners ---
@@ -300,12 +305,12 @@
 
         player.addEventListener('pause', () => {
           stopHeartbeat();
-          player.currentTime.then(t => ping('pause', { time: Math.round(t) }));
-
+          getTime().then(t => ping('pause', { time: Math.round(t) }));
+          
           // --- AUTO-RESUME (Tentative de maintien de lecture) ---
           if (document.hidden) {
-            console.log("Tentative de reprise automatique en arrière-plan...");
-            player.play().catch(e => console.log("Echec auto-resume:", e));
+              console.log("Tentative de reprise automatique en arrière-plan...");
+              player.play().catch(e => console.log("Echec auto-resume:", e));
           }
         });
 
@@ -313,18 +318,18 @@
           stopHeartbeat();
           showCalendly();
           ping('calendly_auto_open');
-          player.currentTime.then(t => ping('completed', { time: Math.round(t) })).catch(() => { });
+          getTime().then(t => ping('completed', { time: Math.round(t) }));
         });
 
         player.addEventListener('seeking', () => {
-          player.currentTime.then(t => ping('seek', { time: Math.round(t) }));
+          getTime().then(t => ping('seek', { time: Math.round(t) }));
         });
 
-        // Tracking de progression (toutes les 5 secondes) - Gardé pour la compatibilité
+        // Tracking de progression (toutes les 5 secondes)
         let lastPct = 0;
         player.addEventListener('timeupdate', () => {
-          player.currentTime.then(t => {
-            player.duration.then(d => {
+          getTime().then(t => {
+            getDur().then(d => {
               if (d > 0) {
                 const pct = Math.round((t / d) * 100);
                 if (pct > lastPct + 5) {
@@ -337,13 +342,11 @@
         });
 
         // --- Gestion Visibilité & Fermeture (CRITIQUE) ---
-
+        
         document.addEventListener("visibilitychange", () => {
-          player.currentTime.then(t => {
+          getTime().then(t => {
             if (document.visibilityState === 'visible') {
               ping('focus_gained', { time: Math.round(t) });
-              // Si on revient et que c'était censé jouer, on s'assure que ça joue
-              // (Optionnel, peut être intrusif, on laisse l'utilisateur relancer si besoin)
             } else {
               // L'utilisateur quitte/cache l'onglet : ON SAUVEGARDE IMMÉDIATEMENT
               ping('suspend', { time: Math.round(t) });
@@ -353,7 +356,7 @@
 
         addEventListener("pagehide", () => {
           // Dernier espoir de sauvegarde
-          player.currentTime.then(t => ping("pagehide", { time: Math.round(t) })).catch(() => ping("pagehide"));
+          getTime().then(t => ping("pagehide", { time: Math.round(t) }));
         });
       });
     })();
