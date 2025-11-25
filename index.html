@@ -5,6 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vidéo</title>
+  <link rel="icon" type="image/png" href="favicon.png">
 
   <!-- PERF PRIORITÉ VIDÉO : rien de bloquant, tout en async/defer -->
   <!-- Cloudflare Stream: réchauffage -->
@@ -276,24 +277,24 @@
 
         // --- Heartbeat & Time Tracking ---
         let heartbeatInterval = null;
-        
+
         function sendHeartbeat() {
-            getTime().then(t => {
-                ping('playing', { time: Math.round(t) });
-            });
+          getTime().then(t => {
+            ping('playing', { time: Math.round(t) });
+          });
         }
 
         function startHeartbeat() {
-            if (!heartbeatInterval) {
-                heartbeatInterval = setInterval(sendHeartbeat, 5000);
-            }
+          if (!heartbeatInterval) {
+            heartbeatInterval = setInterval(sendHeartbeat, 5000);
+          }
         }
 
         function stopHeartbeat() {
-            if (heartbeatInterval) {
-                clearInterval(heartbeatInterval);
-                heartbeatInterval = null;
-            }
+          if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+          }
         }
 
         // --- Event Listeners ---
@@ -306,11 +307,11 @@
         player.addEventListener('pause', () => {
           stopHeartbeat();
           getTime().then(t => ping('pause', { time: Math.round(t) }));
-          
+
           // --- AUTO-RESUME (Tentative de maintien de lecture) ---
           if (document.hidden) {
-              console.log("Tentative de reprise automatique en arrière-plan...");
-              player.play().catch(e => console.log("Echec auto-resume:", e));
+            console.log("Tentative de reprise automatique en arrière-plan...");
+            player.play().catch(e => console.log("Echec auto-resume:", e));
           }
         });
 
@@ -342,7 +343,7 @@
         });
 
         // --- Gestion Visibilité & Fermeture (CRITIQUE) ---
-        
+
         document.addEventListener("visibilitychange", () => {
           getTime().then(t => {
             if (document.visibilityState === 'visible') {
